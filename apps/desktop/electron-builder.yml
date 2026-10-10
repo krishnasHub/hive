@@ -1,10 +1,13 @@
 appId: dev.hive.desktop
 productName: Hive
+# node-pty ships N-API prebuilds (and compiles N-API on Linux), which work in Electron as-is.
+npmRebuild: false
 directories:
   buildResources: build
   output: release/${version}
 files:
   - out/**
+  - resources/**
   - package.json
   - '!**/*.map'
 extraResources:

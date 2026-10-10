@@ -22,6 +22,7 @@ const api: HiveApi = {
     scrollback: (id) => invoke('sessions:scrollback', id),
     answerPermission: (id, requestId, answer) => invoke('sessions:answerPermission', id, requestId, answer),
     interrupt: (id) => invoke('sessions:interrupt', id),
+    answerTrust: (id, trust) => invoke('sessions:answerTrust', id, trust),
     onData: (fn) => on('sessions:data', fn),
     onUpdate: (fn) => on('sessions:update', fn),
     onRemoved: (fn) => on('sessions:removed', fn),

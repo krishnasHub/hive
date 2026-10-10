@@ -3,28 +3,29 @@ import type { HiveSettings, NotificationSettings, PluginInfo, PluginSettingField
 import { Modal } from './Modal'
 import { playChime } from '../chime'
 
-type Tab = 'notifications' | 'channels' | 'general'
+export type SettingsTab = 'plugins' | 'notifications' | 'general'
 
 interface Props {
+  initialTab?: SettingsTab
   settings: HiveSettings
   onChange(s: HiveSettings): void
   onClose(): void
 }
 
-export function SettingsDialog({ settings, onChange, onClose }: Props) {
-  const [tab, setTab] = useState<Tab>('channels')
+export function SettingsDialog({ initialTab = 'general', settings, onChange, onClose }: Props) {
+  const [tab, setTab] = useState<SettingsTab>(initialTab)
   const save = async (patch: Partial<HiveSettings>) => onChange(await window.hive.settings.update(patch))
 
   return (
     <Modal title="Settings" onClose={onClose} wide>
       <div className="tabs">
-        {(['channels', 'notifications', 'general'] as Tab[]).map((t) => (
+        {(['general', 'notifications', 'plugins'] as SettingsTab[]).map((t) => (
           <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>
-            {t === 'channels' ? 'Phone channels' : t === 'notifications' ? 'When to notify' : 'General'}
+            {t === 'plugins' ? 'Plugins' : t === 'notifications' ? 'Notifications' : 'General'}
           </button>
         ))}
       </div>
-      {tab === 'channels' && <Channels />}
+      {tab === 'plugins' && <Channels />}
       {tab === 'notifications' && <Notifications value={settings.notifications} onSave={(n) => save({ notifications: n })} />}
       {tab === 'general' && <General settings={settings} onSave={save} />}
     </Modal>
@@ -45,12 +46,15 @@ function Channels() {
   return (
     <div>
       <p className="muted">
-        Pick one or more ways to reach you. When a session needs you and you're away, Hive messages you there. Reply in the thread to answer.
-        Channels are plugins. Add your own in{' '}
+        <strong className="text">Phone channels.</strong> Turn on one or more ways for Hive to reach you. When a session needs you and you're
+        away, Hive messages you there, and you can reply in the thread to answer.
+      </p>
+      <p className="muted small">
+        To add a plugin, drop its folder into{' '}
         <button className="link" onClick={() => void window.hive.plugins.openFolder()}>
           ~/.hive/plugins
-        </button>
-        .
+        </button>{' '}
+        and restart Hive. Writing your own takes about 50 lines; see docs/PLUGINS.md in the Hive repo.
       </p>
       {channels.map((p) => (
         <PluginCard key={p.manifest.id} plugin={p} open={open === p.manifest.id} onToggleOpen={() => setOpen(open === p.manifest.id ? null : p.manifest.id)} />
@@ -294,6 +298,14 @@ function General({ settings, onSave }: { settings: HiveSettings; onSave(p: Parti
             Browse…
           </button>
         </div>
+      </label>
+      <label className="field inline">
+        <input type="checkbox" checked={g.closeToTray} onChange={(e) => setG({ ...g, closeToTray: e.target.checked })} />
+        Keep running in the system tray when I close the window (sessions and notifications continue)
+      </label>
+      <label className="field inline">
+        <input type="checkbox" checked={g.launchAtLogin} onChange={(e) => setG({ ...g, launchAtLogin: e.target.checked })} />
+        Start Hive when I log in (in the tray)
       </label>
       <div className="grid2">
         <label className="field">

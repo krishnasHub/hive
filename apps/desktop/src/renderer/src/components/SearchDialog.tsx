@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import type { IndexStatus, SearchHit } from '@shared/types'
 import { Modal } from './Modal'
-import { basename } from './Sidebar'
+import { basename } from '../recent'
 
 /** Snippets mark matches with \u0001…\u0002; render them as <mark> without using innerHTML. */
 function Snippet({ text }: { text: string }) {

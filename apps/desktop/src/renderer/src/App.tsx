@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { HiveSettings, Presence, PresenceMode, SessionInfo } from '@shared/types'
+import { attentionMap, newlyNeedingAttention, type AttentionKind } from '@core/attention'
 import { TerminalView, focusTerminalSoon } from './components/TerminalView'
-import { Sidebar } from './components/Sidebar'
-import { TabBar } from './components/TabBar'
-import { ApprovalBar } from './components/ApprovalBar'
-import { SettingsDialog } from './components/SettingsDialog'
+import { TitleBar } from './components/TitleBar'
+import { ApprovalBar, TrustBar } from './components/ApprovalBar'
+import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
 import { SearchDialog } from './components/SearchDialog'
 import { NewSessionDialog } from './components/NewSessionDialog'
 import { ActivityDialog } from './components/ActivityDialog'
 import { wireTerminalData } from './terminals'
-import { attentionMap, newlyNeedingAttention, type AttentionKind } from '@core/attention'
 import { playChime } from './chime'
 import { badgeDataUrl } from './badge'
+import { loadRecent, saveRecent } from './recent'
 
 wireTerminalData()
 
-type Dialog = 'settings' | 'search' | 'new' | 'activity' | null
+type Dialog = { kind: 'settings'; tab: SettingsTab } | { kind: 'search' } | { kind: 'new' } | { kind: 'activity' } | null
 
 const isMac = window.hive.platform === 'darwin'
 
@@ -82,7 +82,18 @@ export function App() {
     if (active?.status === 'dormant') void window.hive.sessions.start(active.id)
   }, [active?.id, active?.status])
 
+  const [recentTick, setRecentTick] = useState(0)
+  const recentFolders = useMemo(() => {
+    const all = [...loadRecent(), ...sessions.map((s) => s.cwd), settings?.general.defaultCwd ?? '']
+    return [...new Set(all.filter(Boolean))]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions.length, settings?.general.defaultCwd, recentTick])
+
   const createSession = useCallback(async (cwd?: string, title?: string, resumeClaudeSessionId?: string) => {
+    if (cwd) {
+      saveRecent(cwd)
+      setRecentTick((t) => t + 1)
+    }
     const s = await window.hive.sessions.create({ cwd, title, resumeClaudeSessionId })
     setSessions((prev) => (prev.some((x) => x.id === s.id) ? prev : [...prev, s]))
     setActiveId(s.id)
@@ -97,6 +108,9 @@ export function App() {
     }
     await window.hive.sessions.close(id)
   }, [sessions])
+
+  // "+" opens a new tab in the current tab's folder, like duplicating a terminal tab.
+  const quickCwd = () => active?.cwd || recentFolders[0] || settings?.general.defaultCwd
 
   const cycle = useCallback(
     (dir: 1 | -1) => {
@@ -114,17 +128,18 @@ export function App() {
     const k = e.key.toLowerCase()
     if (e.ctrlKey && e.key === 'Tab') return () => cycle(e.shiftKey ? -1 : 1)
     if (!mod) return null
-    if (k === 't') return () => setDialog('new')
+    if (k === 't') return () => void createSession(quickCwd())
+    if (k === 'n') return () => setDialog({ kind: 'new' })
     if (k === 'w') return () => activeId && void closeSession(activeId)
-    if (k === 'f') return () => setDialog('search')
-    if (k === ',' || k === '<') return () => setDialog('settings')
+    if (k === 'f') return () => setDialog({ kind: 'search' })
+    if (k === ',' || k === '<') return () => setDialog({ kind: 'settings', tab: 'general' })
     if (/^[1-9]$/.test(e.key)) return () => {
       const s = sessions[Number(e.key) - 1]
       if (s) setActiveId(s.id)
       focusTerminalSoon()
     }
     return null
-  }, [cycle, activeId, closeSession, sessions])
+  }, [cycle, activeId, closeSession, sessions, createSession])
 
   const shortcutRef = useRef(shortcut)
   shortcutRef.current = shortcut
@@ -163,96 +178,85 @@ export function App() {
     window.hive.app.setBadge(n, n ? badgeDataUrl(n) : null)
   }, [attention.size])
 
-  if (!settings) return <div className="boot">🐝</div>
+  if (!settings) return <div className="boot" />
+
+  const select = (id: string) => {
+    setActiveId(id)
+    focusTerminalSoon()
+  }
 
   return (
     <div className="app">
-      <Sidebar
+      <TitleBar
+        platform={window.hive.platform}
         sessions={sessions}
         activeId={activeId}
         needsYou={needsYou}
+        recentFolders={recentFolders}
         presence={presence}
-        onSelect={(id) => {
-          setActiveId(id)
-          focusTerminalSoon()
-        }}
-        onNew={() => setDialog('new')}
-        onSearch={() => setDialog('search')}
-        onSettings={() => setDialog('settings')}
-        onActivity={() => setDialog('activity')}
+        onSelect={select}
+        onClose={(id) => void closeSession(id)}
+        onRename={(id, title) => void window.hive.sessions.rename(id, title)}
+        onNewQuick={() => void createSession(quickCwd())}
+        onNewIn={(cwd) => void createSession(cwd)}
+        onNewChoose={() => setDialog({ kind: 'new' })}
+        onSearch={() => setDialog({ kind: 'search' })}
+        onActivity={() => setDialog({ kind: 'activity' })}
+        onPlugins={() => setDialog({ kind: 'settings', tab: 'plugins' })}
+        onSettings={() => setDialog({ kind: 'settings', tab: 'general' })}
         onPresence={(mode) => void window.hive.presence.setMode(mode)}
       />
-      <main className="main">
-        <TabBar
-          sessions={sessions}
-          activeId={activeId}
-          needsYou={needsYou}
-          onSelect={(id) => {
-            setActiveId(id)
-            focusTerminalSoon()
-          }}
-          onClose={(id) => void closeSession(id)}
-          onNew={() => setDialog('new')}
-          onRename={(id, title) => void window.hive.sessions.rename(id, title)}
-        />
-        {active?.pending?.held && <ApprovalBar session={active} />}
-        <div className="terminals">
-          {sessions.map((s) =>
-            s.status === 'dormant' ? null : (
-              <TerminalView key={s.id} sessionId={s.id} active={s.id === activeId} general={settings.general} isAppShortcut={isAppShortcut} />
-            )
-          )}
-          {active?.status === 'exited' && (
-            <div className="overlay-card">
-              <div>
-                {errors[active.id] ?? `Claude exited${active.exitCode !== undefined ? ` (code ${active.exitCode})` : ''}.`}
-              </div>
-              <div className="row">
-                <button
-                  className="primary"
-                  onClick={() => {
-                    setErrors((e) => ({ ...e, [active.id]: '' }))
-                    void window.hive.sessions.start(active.id)
-                  }}
-                >
-                  Resume conversation
-                </button>
-                <button onClick={() => void closeSession(active.id)}>Close tab</button>
-              </div>
+      {active?.trustPrompt && <TrustBar session={active} />}
+      {active?.pending?.held && <ApprovalBar session={active} />}
+      <main className="terminals">
+        {sessions.map((s) =>
+          s.status === 'dormant' ? null : (
+            <TerminalView key={s.id} sessionId={s.id} active={s.id === activeId} general={settings.general} isAppShortcut={isAppShortcut} />
+          )
+        )}
+        {active?.status === 'exited' && (
+          <div className="overlay-card">
+            <div>{errors[active.id] || `Claude exited${active.exitCode !== undefined ? ` (code ${active.exitCode})` : ''}.`}</div>
+            <div className="row">
+              <button
+                className="primary"
+                onClick={() => {
+                  setErrors((e) => ({ ...e, [active.id]: '' }))
+                  void window.hive.sessions.start(active.id)
+                }}
+              >
+                Resume conversation
+              </button>
+              <button onClick={() => void closeSession(active.id)}>Close tab</button>
             </div>
-          )}
-          {!sessions.length && (
-            <div className="empty">
-              <div className="empty-logo">🐝</div>
-              <h1>Welcome to Hive</h1>
-              <p>Run several Claude Code sessions side by side. Hive tells you when one needs you, on your desktop or your phone.</p>
-              <div className="row">
-                <button className="primary" onClick={() => setDialog('new')}>
-                  New session
-                </button>
-                <button onClick={() => setDialog('settings')}>Set up phone notifications</button>
-              </div>
-              <p className="hint">
-                {isMac ? '⌘T' : 'Ctrl+Shift+T'} new session · {isMac ? '⌘F' : 'Ctrl+Shift+F'} search history · Ctrl+Tab switch tabs
-              </p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+        {!sessions.length && (
+          <div className="empty">
+            <pre className="empty-prompt">
+              <span className="accent">hive</span> <span className="muted">~</span> {'>'} <span className="cursor" />
+            </pre>
+            <p>
+              Press <kbd>+</kbd> or <kbd>{isMac ? '⌘T' : 'Ctrl+Shift+T'}</kbd> to start a Claude session.
+            </p>
+            <p className="muted small">
+              <button className="link" onClick={() => setDialog({ kind: 'settings', tab: 'plugins' })}>
+                Set up phone notifications
+              </button>{' '}
+              · <kbd>{isMac ? '⌘F' : 'Ctrl+Shift+F'}</kbd> search past sessions · <kbd>Ctrl+Tab</kbd> switch tabs
+            </p>
+          </div>
+        )}
       </main>
 
-      {dialog === 'new' && (
-        <NewSessionDialog
-          sessions={sessions}
-          defaultCwd={settings.general.defaultCwd}
-          onCreate={(cwd, title) => void createSession(cwd, title)}
-          onClose={() => setDialog(null)}
-        />
+      {dialog?.kind === 'new' && (
+        <NewSessionDialog recent={recentFolders} defaultCwd={quickCwd() ?? ''} onCreate={(cwd, title) => void createSession(cwd, title)} onClose={() => setDialog(null)} />
       )}
-      {dialog === 'search' && (
+      {dialog?.kind === 'search' && (
         <SearchDialog onResume={(hit) => void createSession(hit.cwd || undefined, hit.title || undefined, hit.sessionId)} onClose={() => setDialog(null)} />
       )}
-      {dialog === 'settings' && <SettingsDialog settings={settings} onChange={setSettings} onClose={() => setDialog(null)} />}
-      {dialog === 'activity' && <ActivityDialog onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'settings' && <SettingsDialog initialTab={dialog.tab} settings={settings} onChange={setSettings} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'activity' && <ActivityDialog onClose={() => setDialog(null)} />}
     </div>
   )
 }

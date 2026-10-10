@@ -14,6 +14,7 @@ import { SessionManager } from './sessionManager'
 import { SettingsStore } from './store'
 import { locateClaude } from './claudeLocator'
 import { runScreenshots, runSmoke } from './smoke'
+import { appIcon, applyLoginItem, HiveTray } from './tray'
 
 // GUI apps on macOS/Linux don't inherit your shell PATH, so `claude` (and the tools it runs) go missing.
 function adoptLoginShellPath() {
@@ -198,16 +199,26 @@ plugins.on('log', (id, level, text) => {
 
 // ---------- window ----------
 
-function createWindow() {
+const isMac = process.platform === 'darwin'
+export const TITLEBAR_HEIGHT = 40
+let quitting = false
+
+function createWindow(showOnReady = true) {
   win = new BrowserWindow({
     width: 1320,
     height: 860,
-    minWidth: 720,
-    minHeight: 420,
+    minWidth: 640,
+    minHeight: 400,
     show: false,
-    backgroundColor: '#0f1115',
+    backgroundColor: '#0c0c0c',
     title: 'Hive',
+    icon: isMac ? undefined : appIcon(),
     autoHideMenuBar: true,
+    // Tabs live in the title bar, like Windows Terminal. The OS still draws the window buttons.
+    titleBarStyle: 'hidden',
+    ...(isMac
+      ? { trafficLightPosition: { x: 14, y: 13 } }
+      : { titleBarOverlay: { color: '#1b1b1b', symbolColor: '#d4d4d4', height: TITLEBAR_HEIGHT } }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -216,8 +227,20 @@ function createWindow() {
       spellcheck: false
     }
   })
-  win.once('ready-to-show', () => win?.show())
+  win.once('ready-to-show', () => showOnReady && win?.show())
   win.on('closed', () => (win = undefined))
+  // Closing the window hides Hive to the tray so sessions and notifications keep running.
+  win.on('close', (e) => {
+    if (quitting || !store.get().general.closeToTray) return
+    e.preventDefault()
+    win?.hide()
+    if (!store.get().general.trayHintShown) {
+      store.update({ general: { ...store.get().general, trayHintShown: true } })
+      if (Notification.isSupported()) {
+        new Notification({ title: 'Hive is still running', body: 'Your sessions keep going and Hive will still notify you. Quit from the tray icon.', silent: true }).show()
+      }
+    }
+  })
   win.on('focus', () => win?.flashFrame(false))
   // The title carries the badge count ("(2) Hive"); don't let the page's <title> reset it.
   win.on('page-title-updated', (e) => e.preventDefault())
@@ -238,6 +261,23 @@ function createWindow() {
   else void win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+function showWindow() {
+  if (!win) createWindow()
+  if (win!.isMinimized()) win!.restore()
+  win!.show()
+  win!.focus()
+}
+
+const tray = new HiveTray({
+  show: showWindow,
+  quit: () => app.quit(),
+  presenceMode: () => presence.mode,
+  setPresenceMode: (mode) => {
+    presence.setMode(mode)
+    broadcast('presence:change', { presence: presence.get(), mode: presence.mode })
+  }
+})
+
 async function openExternal(url: string) {
   try {
     const u = new URL(url)
@@ -253,6 +293,7 @@ let badgeCount = 0
 function setBadge(count: number, overlayDataUrl: string | null) {
   const prev = badgeCount
   badgeCount = Math.max(0, Math.floor(count))
+  tray.setCount(badgeCount)
   if (!win) return
   win.setTitle(badgeCount ? `(${badgeCount}) Hive` : 'Hive')
   if (process.platform === 'win32') {
@@ -276,7 +317,10 @@ sessions.on('removed', (id) => broadcast('sessions:removed', id))
 sessions.on('error', (id, m) => broadcast('sessions:error', id, m))
 plugins.on('change', () => broadcast('plugins:change'))
 history.on('status', (s) => broadcast('history:status', s))
-presence.on('change', (p) => broadcast('presence:change', { presence: p, mode: presence.mode }))
+presence.on('change', (p) => {
+  broadcast('presence:change', { presence: p, mode: presence.mode })
+  tray.refresh()
+})
 
 // ---------- IPC ----------
 
@@ -309,6 +353,7 @@ function registerIpc() {
     if (s?.pending) logActivity(`Hive: ${answer === 'terminal' ? 'sent to terminal' : answer} ${s.pending.summary}`, s)
   })
   ipcMain.handle('sessions:interrupt', (_e, id: string) => sessions.interrupt(id))
+  ipcMain.handle('sessions:answerTrust', (_e, id: string, trust: boolean) => sessions.answerTrust(id, trust))
 
   ipcMain.handle('attachments:saveImage', (_e, sessionId: string, bytes: ArrayBuffer, mime: string) => {
     const ext = IMAGE_EXT[mime] ?? 'png'
@@ -339,6 +384,7 @@ function registerIpc() {
   ipcMain.handle('presence:setMode', (_e, mode: PresenceMode) => {
     presence.setMode(mode)
     broadcast('presence:change', { presence: presence.get(), mode: presence.mode })
+    tray.refresh()
   })
 
   ipcMain.handle('history:search', (_e, q: string) => history.search(q))
@@ -358,11 +404,7 @@ function registerIpc() {
 
 // ---------- lifecycle ----------
 
-app.on('second-instance', () => {
-  if (!win) return createWindow()
-  if (win.isMinimized()) win.restore()
-  win.focus()
-})
+app.on('second-instance', () => showWindow())
 
 app.whenReady().then(async () => {
   // Windows only shows toasts for a registered AppUserModelID; unpackaged dev builds must use the exe path.
@@ -375,12 +417,14 @@ app.whenReady().then(async () => {
   plugins.discover()
   plugins.startEnabled()
   history.start()
-  createWindow()
+  tray.create()
+  applyLoginItem(store.get().general.launchAtLogin)
+  store.onChange((s) => applyLoginItem(s.general.launchAtLogin))
+  // Started at login: stay in the tray until you open it.
+  createWindow(!process.argv.includes('--hidden'))
   if (process.env.HIVE_SMOKE) runSmoke(sessions, () => win, paths.logs)
   if (process.env.HIVE_SCREENSHOTS) void runScreenshots(() => win, paths.logs)
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-  })
+  app.on('activate', () => showWindow())
 })
 
 app.on('window-all-closed', () => {
@@ -388,6 +432,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  quitting = true
+  tray.destroy()
   sessions.shutdown()
   plugins.stopAll()
   history.stop()

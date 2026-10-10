@@ -51,6 +51,13 @@ export function runSmoke(sessions: SessionManager, getWin: () => BrowserWindow |
   if (process.env.HIVE_SMOKE_BLUR) setTimeout(() => getWin()?.blur(), 3000)
   let prompted = false
   let sawPermission = false
+  let trustSeen = false
+  let idleSeen = false
+  const sendPrompt = () => {
+    if (prompted) return
+    prompted = true
+    sessions.sendPrompt(s.id, 'Use the Bash tool to run exactly: echo hive-smoke > smoke.txt   Then reply with just the word DONE.')
+  }
 
   sessions.on('update', (u) => {
     if (u.id !== s.id) return
@@ -59,21 +66,26 @@ export function runSmoke(sessions: SessionManager, getWin: () => BrowserWindow |
       note(`exit code ${u.exitCode}; output:\n${screen().slice(-3000)}`)
       void finish(false)
     }
-    if (u.status === 'idle' && !prompted) {
-      prompted = true
-      setTimeout(() => {
-        // First run in a folder: accept Claude Code's "trust this folder" question (its default is "No, exit").
-        const trustDialog = screen().replace(/\s+/g, '').includes('Itrustthisfolder')
-        if (trustDialog) {
-          note('answering folder trust dialog')
-          sessions.write(s.id, '\x1b[B')
-          setTimeout(() => sessions.write(s.id, '\r'), 300)
+    // First run in a folder: Hive shows its trust bar; screenshot it, then trust like a user would.
+    if (u.trustPrompt && !trustSeen) {
+      trustSeen = true
+      note('trust prompt detected')
+      setTimeout(async () => {
+        try {
+          const img = await getWin()?.webContents.capturePage()
+          if (img) writeFileSync(join(out, 'trust.png'), img.toPNG())
+        } catch {
+          /* ignore */
         }
-        setTimeout(
-          () => sessions.sendPrompt(s.id, 'Use the Bash tool to run exactly: echo hive-smoke > smoke.txt   Then reply with just the word DONE.'),
-          trustDialog ? 5000 : 0
-        )
+        sessions.answerTrust(s.id, true)
+        setTimeout(sendPrompt, 5000)
       }, 1500)
+    }
+    if (u.status === 'idle' && !idleSeen) {
+      idleSeen = true
+      setTimeout(() => {
+        if (!trustSeen) sendPrompt()
+      }, 2500)
     }
   })
 
@@ -116,13 +128,13 @@ export async function runScreenshots(getWin: () => BrowserWindow | undefined, ou
   const js = (code: string) => getWin()?.webContents.executeJavaScript(code)
   await wait(2500)
   await shot('01-empty')
-  await js(`[...document.querySelectorAll('button')].find(b => b.textContent === 'Settings').click()`)
+  await js(`document.querySelector('[aria-label="Plugins"]').click()`)
   await wait(600)
   await js(`document.querySelector('.plugin-head').click()`)
-  await wait(600)
-  await shot('02-channels')
-  await js(`[...document.querySelectorAll('.tabs button')].find(b => b.textContent.startsWith('When')).click()`)
+  await wait(500)
+  await shot('02-plugins')
+  await js(`[...document.querySelectorAll('.tabs button')].find(b => b.textContent === 'General').click()`)
   await wait(400)
-  await shot('03-when')
+  await shot('03-general')
   app.exit(0)
 }

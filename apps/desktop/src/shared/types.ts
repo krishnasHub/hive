@@ -31,6 +31,8 @@ export interface SessionInfo {
   workStartedAt?: number
   lastAssistantMessage?: string
   pending?: PendingPermission
+  /** Claude Code is showing its first-run "trust this folder?" question. */
+  trustPrompt?: boolean
   exitCode?: number
 }
 
@@ -63,6 +65,10 @@ export interface GeneralSettings {
   defaultCwd: string
   fontSize: number
   fontFamily: string
+  /** Closing the window keeps Hive running in the tray. */
+  closeToTray: boolean
+  launchAtLogin: boolean
+  trayHintShown?: boolean
 }
 
 export interface PluginState {

@@ -7,28 +7,29 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import type { GeneralSettings } from '@shared/types'
 import { attachTerminal } from '../terminals'
 
+// Black background, white text, Windows Terminal "Campbell" colors.
 const THEME = {
-  background: '#0f1115',
-  foreground: '#d8dee9',
-  cursor: '#f5b301',
-  cursorAccent: '#0f1115',
-  selectionBackground: '#f5b30155',
-  black: '#1b1f27',
-  red: '#ef6b73',
-  green: '#8cc570',
-  yellow: '#f5c451',
-  blue: '#5fa8f5',
-  magenta: '#c58af9',
-  cyan: '#56c8d8',
-  white: '#d8dee9',
-  brightBlack: '#5c6370',
-  brightRed: '#ff8a91',
-  brightGreen: '#a8dc8a',
-  brightYellow: '#ffd76e',
-  brightBlue: '#82bdff',
-  brightMagenta: '#d7a8ff',
-  brightCyan: '#7fdbe8',
-  brightWhite: '#ffffff'
+  background: '#0c0c0c',
+  foreground: '#f2f2f2',
+  cursor: '#ffffff',
+  cursorAccent: '#0c0c0c',
+  selectionBackground: '#ffffff40',
+  black: '#0c0c0c',
+  red: '#c50f1f',
+  green: '#13a10e',
+  yellow: '#c19c00',
+  blue: '#0037da',
+  magenta: '#881798',
+  cyan: '#3a96dd',
+  white: '#cccccc',
+  brightBlack: '#767676',
+  brightRed: '#e74856',
+  brightGreen: '#16c60c',
+  brightYellow: '#f9f1a5',
+  brightBlue: '#3b78ff',
+  brightMagenta: '#b4009e',
+  brightCyan: '#61d6d6',
+  brightWhite: '#f2f2f2'
 }
 
 /** Shell-quote a path for pasting into the prompt. */
@@ -62,7 +63,7 @@ export function TerminalView({ sessionId, active, general, isAppShortcut }: Prop
       allowProposedApi: true,
       fontFamily: general.fontFamily,
       fontSize: general.fontSize,
-      lineHeight: 1.15,
+      lineHeight: 1.2,
       cursorBlink: true,
       scrollback: 10_000,
       theme: THEME,

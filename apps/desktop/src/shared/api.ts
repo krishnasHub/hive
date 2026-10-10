@@ -23,6 +23,7 @@ export interface HiveApi {
     scrollback(id: string): Promise<{ text: string; end: number }>
     answerPermission(id: string, requestId: string, answer: 'allow' | 'deny' | 'terminal'): Promise<void>
     interrupt(id: string): Promise<void>
+    answerTrust(id: string, trust: boolean): Promise<void>
     onData(fn: (id: string, data: string, end: number) => void): () => void
     onUpdate(fn: (s: SessionInfo) => void): () => void
     onRemoved(fn: (id: string) => void): () => void

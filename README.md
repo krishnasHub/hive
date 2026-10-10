@@ -17,6 +17,7 @@ You: "great, open a PR"
 
 ## Features
 
+- **Looks like a terminal.** Tabs sit in the title bar like Windows Terminal, with a black screen and white text. Small buttons at the top right open search, activity, plugins and settings.
 - **Tabs of real Claude Code.** Each tab runs the `claude` CLI you already have, so slash commands, skills, MCP servers, plugins and `/resume` all work as usual.
 - **Terminal comforts.** Click links to open them in your browser. Paste screenshots straight into the prompt (Hive saves them and hands Claude the file). Drag files in to insert their paths. Shift+Enter adds a newline.
 - **Knows what each session is doing.** Status dots show *working*, *needs permission*, *waiting for you* or *ready*, using Claude Code's own hooks rather than screen-scraping.
@@ -26,6 +27,8 @@ You: "great, open a PR"
 - **Search all your past sessions** (full-text, local) and resume any of them in a new tab.
 - **Tabs survive restarts.** Reopen Hive and each tab resumes its conversation when you click it.
 - **Chime and taskbar badge.** A bell plays when a session needs you or finishes in the background. The taskbar icon shows a red count (the Dock badge on macOS), and the taskbar button flashes until you look.
+- **Runs in the tray.** Closing the window keeps your sessions and notifications going. Optionally, Hive starts when you log in.
+- **Folder trust in one click.** The first time Claude opens a folder, Hive shows a Trust / Cancel bar instead of Claude's "No, exit"-by-default prompt.
 - **Audit log** of every notification and every action taken from your phone.
 
 ## Install and run (from source)
@@ -42,6 +45,8 @@ npm install
 npm run dev        # run in development
 npm run dist       # build an installer into apps/desktop/release/
 ```
+
+Keyboard: `Ctrl+Shift+T` new tab in the current folder, `Ctrl+Shift+N` new tab in another folder, `Ctrl+Shift+W` close tab, `Ctrl+Tab` next tab, `Ctrl+Shift+F` search, `Ctrl+Shift+,` settings (on macOS, use ⌘ instead of Ctrl+Shift).
 
 | Platform | Package |
 |---|---|

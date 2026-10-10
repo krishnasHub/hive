@@ -4,7 +4,9 @@ Electron app that runs Claude Code sessions in tabs and relays "Claude needs you
 Design and verified decisions: docs/DESIGN.md. Plugin API: docs/PLUGINS.md.
 
 ## Commands
-- `npm install` at the repo root (npm workspaces; no postinstall rebuild — node-pty ships N-API prebuilds for win/mac).
+- `npm install` at the repo root (npm workspaces; no postinstall rebuild — node-pty ships N-API prebuilds for win/mac; electron-builder has `npmRebuild: false`).
+- Windows installer: `cd apps/desktop && npx electron-vite build && CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --win nsis` → release/<ver>/. The packaged exe honours the same HIVE_SMOKE env vars.
+- Icons: edit build/icon.svg, then `npx electron scripts/render-icons.cjs` (writes build/icon.png and resources/*.png).
 - `npm run dev` / `npm run build` / `npm test` (vitest, pure logic in apps/desktop/src/core) / `npm run typecheck`.
 - End-to-end smoke test against the real `claude` CLI (uses a little Claude usage):
   `HIVE_HOME=<tmp dir> HIVE_SMOKE=1 HIVE_SMOKE_CWD=<trusted folder> npx electron .` from apps/desktop after `npx electron-vite build`.

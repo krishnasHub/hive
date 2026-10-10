@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- A honeycomb cell with a terminal prompt: Hive. -->
+  <polygon points="256,40 443,148 443,364 256,472 69,364 69,148" fill="#F5B301" stroke="#F5B301" stroke-width="44" stroke-linejoin="round"/>
+  <polyline points="168,186 254,256 168,326" fill="none" stroke="#0C0C0C" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="282" y1="326" x2="356" y2="326" stroke="#0C0C0C" stroke-width="42" stroke-linecap="round"/>
+</svg>

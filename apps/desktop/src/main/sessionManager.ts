@@ -37,6 +37,10 @@ interface Live {
   /** Tail of terminal output, replayed if the window reloads. */
   scrollback: string
   outBuf: string
+  /** Recent output with escape codes and spaces removed, for spotting dialogs. */
+  screenTail: string
+  /** The trust question was answered; Claude redraws it while handling the keys, so stop looking. */
+  trustAnswered?: boolean
   /** Total characters emitted to the renderer; lets it splice scrollback and live data without duplicates. */
   emitted: number
   flushTimer?: NodeJS.Timeout
@@ -45,6 +49,8 @@ interface Live {
 }
 
 const SCROLLBACK_MAX = 256 * 1024
+// eslint-disable-next-line no-control-regex
+const ANSI = /\x1b\[[0-9;?<>]*[a-zA-Z~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][0-9A-Za-z]|\x1b[=>78]/g
 const BRACKET_START = '\x1b[200~'
 const BRACKET_END = '\x1b[201~'
 
@@ -98,6 +104,7 @@ export class SessionManager extends EventEmitter<SessionEvents> {
         titleLocked: !!p.titleLocked,
         scrollback: '',
         outBuf: '',
+        screenTail: '',
         emitted: 0
       })
     }
@@ -160,6 +167,7 @@ export class SessionManager extends EventEmitter<SessionEvents> {
       titleLocked: false,
       scrollback: '',
       outBuf: '',
+      screenTail: '',
       emitted: 0
     }
     this.live.set(id, l)
@@ -246,6 +254,7 @@ export class SessionManager extends EventEmitter<SessionEvents> {
     l.scrollback += d
     if (l.scrollback.length > SCROLLBACK_MAX) l.scrollback = l.scrollback.slice(-SCROLLBACK_MAX)
     if (!l.flushTimer) l.flushTimer = setTimeout(() => this.flush(l), 8)
+    this.watchForTrustPrompt(l, d)
     // SessionStart can't use http hooks, so treat "the UI has drawn and gone quiet" as ready.
     if (l.info.status === 'starting') {
       if (l.startTimer) clearTimeout(l.startTimer)
@@ -263,6 +272,29 @@ export class SessionManager extends EventEmitter<SessionEvents> {
     l.outBuf = ''
     l.emitted += chunk.length
     this.emit('data', l.info.id, chunk, l.emitted)
+  }
+
+  /** Claude Code asks "Do you trust this folder?" the first time it runs somewhere. Its default answer is "No, exit". */
+  private watchForTrustPrompt(l: Live, d: string) {
+    if (l.trustAnswered || (l.info.status !== 'starting' && l.info.status !== 'idle')) return
+    l.screenTail = (l.screenTail + d.replace(ANSI, '').replace(/\s+/g, '')).slice(-4000)
+    const showing = l.screenTail.includes('Itrustthisfolder') && /Entertoconfirm/.test(l.screenTail.slice(-400))
+    if (showing && !l.info.trustPrompt) this.setInfo(l, { trustPrompt: true })
+  }
+
+  answerTrust(id: string, trust: boolean) {
+    const l = this.live.get(id)
+    if (!l?.proc || !l.info.trustPrompt) return
+    l.screenTail = ''
+    l.trustAnswered = true
+    this.setInfo(l, { trustPrompt: false })
+    if (trust) {
+      // Options are "No, exit" (selected) then "Yes, I trust this folder".
+      l.proc.write('\x1b[B')
+      setTimeout(() => l.proc?.write('\r'), 150)
+    } else {
+      l.proc.write('\x1b')
+    }
   }
 
   close(id: string) {
@@ -313,7 +345,7 @@ export class SessionManager extends EventEmitter<SessionEvents> {
   /** Types a prompt into Claude Code and submits it. Works while idle; queued by Claude while working. */
   sendPrompt(id: string, text: string): boolean {
     const l = this.live.get(id)
-    if (!l?.proc) return false
+    if (!l?.proc || l.info.trustPrompt) return false
     const body = text.replace(/\r\n?/g, '\n')
     // Bracketed paste keeps newlines as newlines instead of submitting early.
     l.proc.write(BRACKET_START + body + BRACKET_END)
