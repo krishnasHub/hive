@@ -314,6 +314,7 @@ function broadcast(channel: string, ...args: unknown[]) {
 sessions.on('update', (s) => broadcast('sessions:update', s))
 sessions.on('data', (id, d, end) => broadcast('sessions:data', id, d, end))
 sessions.on('removed', (id) => broadcast('sessions:removed', id))
+sessions.on('trusted', (s) => logActivity(`Trusted folder automatically: ${s.cwd}`, s))
 sessions.on('error', (id, m) => broadcast('sessions:error', id, m))
 plugins.on('change', () => broadcast('plugins:change'))
 history.on('status', (s) => broadcast('history:status', s))

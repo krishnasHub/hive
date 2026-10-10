@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: HiveSettings = {
     extraArgs: '',
     defaultCwd: homedir(),
     fontSize: 14,
+    autoTrustFolders: true,
     closeToTray: true,
     launchAtLogin: false,
     fontFamily: "'Cascadia Mono', 'Cascadia Code', Consolas, Menlo, 'DejaVu Sans Mono', monospace"

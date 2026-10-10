@@ -60,6 +60,7 @@ export interface SessionEvents {
   signal: [SessionInfo, SessionSignal]
   permission: [SessionInfo, PendingPermission]
   removed: [string]
+  trusted: [SessionInfo]
   error: [string, string]
 }
 
@@ -279,7 +280,17 @@ export class SessionManager extends EventEmitter<SessionEvents> {
     if (l.trustAnswered || (l.info.status !== 'starting' && l.info.status !== 'idle')) return
     l.screenTail = (l.screenTail + d.replace(ANSI, '').replace(/\s+/g, '')).slice(-4000)
     const showing = l.screenTail.includes('Itrustthisfolder') && /Entertoconfirm/.test(l.screenTail.slice(-400))
-    if (showing && !l.info.trustPrompt) this.setInfo(l, { trustPrompt: true })
+    if (!showing || l.info.trustPrompt) return
+    if (this.store.get().general.autoTrustFolders) {
+      // You chose this folder in Hive, so answer Claude's question for you.
+      l.info = { ...l.info, trustPrompt: true }
+      setTimeout(() => {
+        this.answerTrust(l.info.id, true)
+        this.emit('trusted', l.info)
+      }, 250)
+      return
+    }
+    this.setInfo(l, { trustPrompt: true })
   }
 
   answerTrust(id: string, trust: boolean) {

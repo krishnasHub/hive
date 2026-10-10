@@ -28,7 +28,7 @@ You: "great, open a PR"
 - **Tabs survive restarts.** Reopen Hive and each tab resumes its conversation when you click it.
 - **Chime and taskbar badge.** A bell plays when a session needs you or finishes in the background. The taskbar icon shows a red count (the Dock badge on macOS), and the taskbar button flashes until you look.
 - **Runs in the tray.** Closing the window keeps your sessions and notifications going. Optionally, Hive starts when you log in.
-- **Folder trust in one click.** The first time Claude opens a folder, Hive shows a Trust / Cancel bar instead of Claude's "No, exit"-by-default prompt.
+- **No folder-trust interruptions.** Hive answers Claude's first-run "Do you trust this folder?" for folders you open in Hive (logged in Activity). Turn this off in Settings → General to get a Trust / Cancel bar instead.
 - **Audit log** of every notification and every action taken from your phone.
 
 ## Install and run (from source)

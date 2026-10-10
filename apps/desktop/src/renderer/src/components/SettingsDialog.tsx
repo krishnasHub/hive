@@ -300,6 +300,10 @@ function General({ settings, onSave }: { settings: HiveSettings; onSave(p: Parti
         </div>
       </label>
       <label className="field inline">
+        <input type="checkbox" checked={g.autoTrustFolders} onChange={(e) => setG({ ...g, autoTrustFolders: e.target.checked })} />
+        Trust folders automatically when I start a session in them (skips Claude's "Do you trust this folder?" question)
+      </label>
+      <label className="field inline">
         <input type="checkbox" checked={g.closeToTray} onChange={(e) => setG({ ...g, closeToTray: e.target.checked })} />
         Keep running in the system tray when I close the window (sessions and notifications continue)
       </label>

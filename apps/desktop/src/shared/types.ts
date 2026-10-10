@@ -65,6 +65,8 @@ export interface GeneralSettings {
   defaultCwd: string
   fontSize: number
   fontFamily: string
+  /** Answer Claude Code's first-run "trust this folder?" with yes automatically. */
+  autoTrustFolders: boolean
   /** Closing the window keeps Hive running in the tray. */
   closeToTray: boolean
   launchAtLogin: boolean
