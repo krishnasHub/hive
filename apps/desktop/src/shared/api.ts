@@ -66,5 +66,7 @@ export interface HiveApi {
     openExternal(url: string): Promise<void>
     pickFolder(defaultPath?: string): Promise<string | null>
     showItem(path: string): Promise<void>
+    /** Taskbar/dock badge with the number of sessions that need you (0 clears it). */
+    setBadge(count: number, overlayDataUrl: string | null): void
   }
 }

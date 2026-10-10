@@ -1,7 +1,7 @@
 // End-to-end smoke test, enabled with HIVE_SMOKE=1. Starts a real Claude session, sends a prompt that
 // needs permission, approves it through Hive, waits for the turn to finish, screenshots and quits.
 //   HIVE_HOME=<tmp> HIVE_SMOKE=1 HIVE_SMOKE_CWD=<dir> electron .
-import { app, type BrowserWindow } from 'electron'
+import { app, desktopCapturer, screen as electronScreen, type BrowserWindow } from 'electron'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SessionManager } from './sessionManager'
@@ -22,6 +22,18 @@ export function runSmoke(sessions: SessionManager, getWin: () => BrowserWindow |
     if (finished) return
     finished = true
     note(ok ? 'PASS' : 'FAIL')
+    if (process.env.HIVE_SMOKE_BLUR) {
+      // Grab the whole screen so the taskbar badge can be checked.
+      try {
+        await new Promise((r) => setTimeout(r, 1500))
+        const { width, height } = electronScreen.getPrimaryDisplay().size
+        const sf = electronScreen.getPrimaryDisplay().scaleFactor
+        const [src] = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: width * sf, height: height * sf } })
+        if (src) writeFileSync(join(out, 'screen.png'), src.thumbnail.toPNG())
+      } catch (err) {
+        note(`screen capture failed: ${(err as Error).message}`)
+      }
+    }
     try {
       const img = await getWin()?.webContents.capturePage()
       if (img) writeFileSync(join(out, 'smoke.png'), img.toPNG())
@@ -35,6 +47,8 @@ export function runSmoke(sessions: SessionManager, getWin: () => BrowserWindow |
   const s = sessions.create({ cwd, title: 'Smoke test' })
   const screen = () => sessions.scrollback(s.id).text.replace(ANSI, '')
   note(`created ${s.shortCode} in ${cwd}`)
+  // Look away from Hive so the finished turn counts as unseen (badge + chime).
+  if (process.env.HIVE_SMOKE_BLUR) setTimeout(() => getWin()?.blur(), 3000)
   let prompted = false
   let sawPermission = false
 

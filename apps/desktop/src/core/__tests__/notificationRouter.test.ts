@@ -3,6 +3,8 @@ import type { NotificationSettings, OutboundMessage, Presence, SessionInfo } fro
 import { NotificationRouter } from '../notificationRouter'
 
 const settings: NotificationSettings = {
+  sound: true,
+  soundVolume: 0.6,
   remoteWhen: 'away',
   awayAfterSec: 120,
   remoteDelaySec: 10,

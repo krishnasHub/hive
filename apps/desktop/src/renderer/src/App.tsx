@@ -9,6 +9,9 @@ import { SearchDialog } from './components/SearchDialog'
 import { NewSessionDialog } from './components/NewSessionDialog'
 import { ActivityDialog } from './components/ActivityDialog'
 import { wireTerminalData } from './terminals'
+import { attentionMap, newlyNeedingAttention, type AttentionKind } from '@core/attention'
+import { playChime } from './chime'
+import { badgeDataUrl } from './badge'
 
 wireTerminalData()
 
@@ -24,6 +27,18 @@ export function App() {
   const [presence, setPresence] = useState<{ presence: Presence; mode: PresenceMode }>({ presence: 'present', mode: 'auto' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [seen, setSeen] = useState<Record<string, number>>({})
+  const [focused, setFocused] = useState(() => document.hasFocus())
+
+  useEffect(() => {
+    const on = () => setFocused(true)
+    const off = () => setFocused(false)
+    window.addEventListener('focus', on)
+    window.addEventListener('blur', off)
+    return () => {
+      window.removeEventListener('focus', on)
+      window.removeEventListener('blur', off)
+    }
+  }, [])
 
   useEffect(() => {
     void window.hive.sessions.list().then((list) => {
@@ -56,11 +71,11 @@ export function App() {
     setActiveId(sessions[0]?.id ?? null)
   }, [sessions, activeId])
 
-  // Mark the active tab as seen (clears its "needs you" badge).
+  // You've seen the active tab once the window has focus (clears its badge).
   const active = sessions.find((s) => s.id === activeId)
   useEffect(() => {
-    if (active) setSeen((m) => ({ ...m, [active.id]: active.lastActivityAt }))
-  }, [active?.id, active?.lastActivityAt])
+    if (active && focused) setSeen((m) => ({ ...m, [active.id]: active.lastActivityAt }))
+  }, [active?.id, active?.lastActivityAt, focused])
 
   // Dormant tabs (restored from last time) start when you open them.
   useEffect(() => {
@@ -127,15 +142,26 @@ export function App() {
     return () => window.removeEventListener('keydown', onKey, true)
   }, [])
 
-  const needsYou = useMemo(
-    () =>
-      new Set(
-        sessions
-          .filter((s) => s.id !== activeId && (s.status === 'waiting_permission' || s.status === 'waiting_input' || (s.status === 'idle' && (seen[s.id] ?? 0) < s.lastActivityAt && s.lastActivityAt > s.createdAt + 2000)))
-          .map((s) => s.id)
-      ),
-    [sessions, activeId, seen]
-  )
+  const attention = useMemo(() => attentionMap(sessions, activeId, focused, seen), [sessions, activeId, focused, seen])
+  const needsYou = useMemo(() => new Set(attention.keys()), [attention])
+
+  // Chime when something new needs you; skip whatever was already pending when the app opened.
+  const prevAttention = useRef<Map<string, AttentionKind> | null>(null)
+  const loaded = settings !== null && sessions.length > 0
+  useEffect(() => {
+    if (!loaded) return
+    const prev = prevAttention.current
+    prevAttention.current = attention
+    if (!prev || !settings?.notifications.sound) return
+    const kind = newlyNeedingAttention(prev, attention)
+    if (kind) playChime(kind, settings.notifications.soundVolume)
+  }, [attention, loaded, settings?.notifications.sound, settings?.notifications.soundVolume])
+
+  // Taskbar badge: how many sessions need you.
+  useEffect(() => {
+    const n = attention.size
+    window.hive.app.setBadge(n, n ? badgeDataUrl(n) : null)
+  }, [attention.size])
 
   if (!settings) return <div className="boot">🐝</div>
 

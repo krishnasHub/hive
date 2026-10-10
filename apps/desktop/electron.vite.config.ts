@@ -13,6 +13,6 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react()],
-    resolve: { alias: { '@shared': resolve('src/shared') } }
+    resolve: { alias: { '@shared': resolve('src/shared'), '@core': resolve('src/core') } }
   }
 })

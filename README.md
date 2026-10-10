@@ -25,6 +25,7 @@ You: "great, open a PR"
 - **Smart about when to ping.** Messages go to your phone only when you're away (idle or screen locked), after a short grace period. Nothing is sent if you answer at the desk first.
 - **Search all your past sessions** (full-text, local) and resume any of them in a new tab.
 - **Tabs survive restarts.** Reopen Hive and each tab resumes its conversation when you click it.
+- **Chime and taskbar badge.** A bell plays when a session needs you or finishes in the background. The taskbar icon shows a red count (the Dock badge on macOS), and the taskbar button flashes until you look.
 - **Audit log** of every notification and every action taken from your phone.
 
 ## Install and run (from source)

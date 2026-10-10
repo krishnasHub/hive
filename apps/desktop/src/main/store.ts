@@ -14,10 +14,12 @@ export const DEFAULT_SETTINGS: HiveSettings = {
     fontFamily: "'Cascadia Code', 'JetBrains Mono', Menlo, Consolas, 'DejaVu Sans Mono', monospace"
   },
   notifications: {
+    sound: true,
+    soundVolume: 0.6,
     remoteWhen: 'away',
     awayAfterSec: 120,
     remoteDelaySec: 15,
-    finishedMinSec: 60,
+    finishedMinSec: 30,
     notifyOn: { permission: true, finished: true, waiting: true },
     interceptPermissions: 'always',
     permissionTimeoutSec: 6 * 60 * 60

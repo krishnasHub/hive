@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, Notification, shell } from 'electron'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -81,7 +81,9 @@ function showToast(msg: OutboundMessage) {
   if (!Notification.isSupported()) return
   // Looking at Hive already? The tab badge is enough.
   if (win && win.isFocused() && !win.isMinimized()) return
-  const n = new Notification({ title: msg.title, body: msg.detail ? `${msg.body}\n${msg.detail}` : msg.body, silent: false })
+  // Hive plays its own chime, so keep the OS toast quiet unless sounds are off in Hive.
+  const silent = store.get().notifications.sound
+  const n = new Notification({ title: msg.title, body: msg.detail ? `${msg.body}\n${msg.detail}` : msg.body, silent })
   n.on('click', () => {
     if (!win) return
     if (win.isMinimized()) win.restore()
@@ -217,6 +219,8 @@ function createWindow() {
   win.once('ready-to-show', () => win?.show())
   win.on('closed', () => (win = undefined))
   win.on('focus', () => win?.flashFrame(false))
+  // The title carries the badge count ("(2) Hive"); don't let the page's <title> reset it.
+  win.on('page-title-updated', (e) => e.preventDefault())
 
   // Links never navigate the app window; they open in your browser.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -241,6 +245,25 @@ async function openExternal(url: string) {
   } catch {
     /* not a URL */
   }
+}
+
+let badgeCount = 0
+
+/** "1" on the taskbar icon (Windows overlay, macOS dock, Linux launcher) plus "(1) Hive" in the title. */
+function setBadge(count: number, overlayDataUrl: string | null) {
+  const prev = badgeCount
+  badgeCount = Math.max(0, Math.floor(count))
+  if (!win) return
+  win.setTitle(badgeCount ? `(${badgeCount}) Hive` : 'Hive')
+  if (process.platform === 'win32') {
+    const img = badgeCount && overlayDataUrl ? nativeImage.createFromDataURL(overlayDataUrl) : null
+    win.setOverlayIcon(img, badgeCount ? `${badgeCount} session${badgeCount === 1 ? '' : 's'} need you` : '')
+  } else {
+    app.setBadgeCount(badgeCount)
+  }
+  // Something new while you're in another app: flash the taskbar button until you come back.
+  if (badgeCount > prev && !win.isFocused()) win.flashFrame(true)
+  if (process.env.HIVE_SMOKE) console.log(`[smoke] badge=${badgeCount}`)
 }
 
 function broadcast(channel: string, ...args: unknown[]) {
@@ -330,6 +353,7 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0]
   })
   ipcMain.handle('app:showItem', (_e, p: string) => shell.showItemInFolder(p))
+  ipcMain.on('app:setBadge', (_e, count: number, overlayDataUrl: string | null) => setBadge(count, overlayDataUrl))
 }
 
 // ---------- lifecycle ----------
@@ -341,7 +365,8 @@ app.on('second-instance', () => {
 })
 
 app.whenReady().then(async () => {
-  app.setAppUserModelId('dev.hive.desktop') // Windows toasts need this
+  // Windows only shows toasts for a registered AppUserModelID; unpackaged dev builds must use the exe path.
+  app.setAppUserModelId(app.isPackaged ? 'dev.hive.desktop' : process.execPath)
   const port = await hooks.start()
   sessions.setHookEndpoint(port, hooks.token)
   sessions.restore()

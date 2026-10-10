@@ -63,7 +63,8 @@ const api: HiveApi = {
   app: {
     openExternal: (url) => invoke('app:openExternal', url),
     pickFolder: (defaultPath) => invoke('app:pickFolder', defaultPath),
-    showItem: (path) => invoke('app:showItem', path)
+    showItem: (path) => invoke('app:showItem', path),
+    setBadge: (count, overlayDataUrl) => ipcRenderer.send('app:setBadge', count, overlayDataUrl)
   }
 }
 

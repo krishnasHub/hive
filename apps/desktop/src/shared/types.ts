@@ -38,6 +38,9 @@ export type RemoteWhen = 'away' | 'always' | 'never'
 export type InterceptMode = 'always' | 'away' | 'never'
 
 export interface NotificationSettings {
+  /** Play a chime when a session needs you or finishes while you're not looking at it. */
+  sound: boolean
+  soundVolume: number // 0..1
   /** When to forward to remote channels (Slack, Telegram, ...). Desktop toasts are always on. */
   remoteWhen: RemoteWhen
   /** Seconds without keyboard/mouse input before you count as away. */

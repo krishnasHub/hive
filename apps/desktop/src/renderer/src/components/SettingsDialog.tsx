@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { HiveSettings, NotificationSettings, PluginInfo, PluginSettingField } from '@shared/types'
 import { Modal } from './Modal'
+import { playChime } from '../chime'
 
 type Tab = 'notifications' | 'channels' | 'general'
 
@@ -179,6 +180,30 @@ function Notifications({ value, onSave }: { value: NotificationSettings; onSave(
   const set = <K extends keyof NotificationSettings>(k: K, v: NotificationSettings[K]) => setN((x) => ({ ...x, [k]: v }))
   return (
     <div>
+      <div className="field">
+        <span>Sound</span>
+        <div className="row">
+          <label className="field inline">
+            <input type="checkbox" checked={n.sound} onChange={(e) => set('sound', e.target.checked)} />
+            Chime when a session needs me or finishes in the background
+          </label>
+        </div>
+        <div className="row">
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={n.soundVolume}
+            disabled={!n.sound}
+            onChange={(e) => set('soundVolume', Number(e.target.value))}
+            aria-label="Chime volume"
+            style={{ maxWidth: 220 }}
+          />
+          <button onClick={() => playChime('needs_you', n.soundVolume)}>Needs you ▶</button>
+          <button onClick={() => playChime('update', n.soundVolume)}>Finished ▶</button>
+        </div>
+      </div>
       <label className="field">
         <span>Send to my phone channels</span>
         <select value={n.remoteWhen} onChange={(e) => set('remoteWhen', e.target.value as NotificationSettings['remoteWhen'])}>
