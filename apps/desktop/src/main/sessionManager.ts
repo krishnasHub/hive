@@ -415,6 +415,10 @@ export class SessionManager extends EventEmitter<SessionEvents> {
       this.persist()
     }
 
+    if (process.env.HIVE_SMOKE) {
+      const p = req.payload
+      console.log(`[smoke] hook ${req.event}${p.tool_name ? ` tool=${p.tool_name}` : ''}${p.agent_id ? ` agent=${p.agent_type ?? p.agent_id}` : ''}${p.prompt ? ` prompt=${String(p.prompt).slice(0, 60)}` : ''}`)
+    }
     if (req.event === 'PermissionRequest') return this.holdPermission(l, req, now)
 
     const t = applyHook(l.info, req.event, req.payload, now, l.titleLocked)

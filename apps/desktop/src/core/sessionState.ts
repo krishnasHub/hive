@@ -62,6 +62,10 @@ export function applyHook(prev: SessionInfo, event: string, p: HookPayload, now:
     case 'PreToolUse':
     case 'PostToolUse':
     case 'PostToolUseFailure':
+      // After a finished turn, only a new tool call by the main agent means real work resumed
+      // (e.g. Claude continuing after a background task). Late "post" events and background
+      // subagents must not flip a done session back to working.
+      if (s.status === 'idle' && (event !== 'PreToolUse' || p.agent_id)) return { session: { ...s, lastActivityAt: prev.lastActivityAt } }
       // Tool ran, so any permission question has been answered.
       if (s.status !== 'working') set('working')
       if (!s.workStartedAt) s.workStartedAt = now

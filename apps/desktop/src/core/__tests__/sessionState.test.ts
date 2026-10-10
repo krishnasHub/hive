@@ -64,6 +64,13 @@ describe('applyHook', () => {
     expect(t.session.pending).toBeUndefined()
   })
 
+  it('late tool events after Stop do not reopen a finished turn', () => {
+    const done = base({ status: 'idle', lastActivityAt: 50 })
+    expect(applyHook(done, 'PostToolUse', {}, 99).session).toMatchObject({ status: 'idle', lastActivityAt: 50 })
+    expect(applyHook(done, 'PreToolUse', { agent_id: 'sub1' }, 99).session.status).toBe('idle')
+    expect(applyHook(done, 'PreToolUse', {}, 99).session.status).toBe('working')
+  })
+
   it('SessionEnd from /clear keeps the session alive', () => {
     expect(applyHook(base(), 'SessionEnd', { reason: 'clear' }, 1).session.status).toBe('idle')
     expect(applyHook(base(), 'SessionEnd', { reason: 'prompt_input_exit' }, 1).session.status).toBe('exited')

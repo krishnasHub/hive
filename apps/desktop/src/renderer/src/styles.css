@@ -390,7 +390,7 @@ kbd {
   margin: 4px 6px;
 }
 
-/* ---------- status dots ---------- */
+/* ---------- status dots: green done, orange working, red needs you ---------- */
 
 .status-dot {
   width: 8px;
@@ -399,25 +399,28 @@ kbd {
   flex: none;
   background: #5a5a5a;
 }
-.status-dot.s-idle {
-  background: #8a8a8a;
+.status-dot.d-done {
+  background: #16c60c;
 }
-.status-dot.s-working,
-.status-dot.s-starting {
-  background: var(--info);
+.status-dot.d-working {
+  background: #ff8c00;
   animation: pulse 1.4s ease-in-out infinite;
 }
-.status-dot.s-waiting_permission,
-.status-dot.s-waiting_input,
-.status-dot.attention {
-  background: var(--accent);
+.status-dot.d-needs {
+  background: #e74856;
 }
-.status-dot.s-exited {
-  background: var(--danger);
-}
-.status-dot.s-dormant {
+.status-dot.d-off {
   background: transparent;
   border: 1px solid #6a6a6a;
+}
+.status-dot.attention {
+  box-shadow: 0 0 0 3px #ffffff26;
+}
+.status-dot.d-needs.attention {
+  box-shadow: 0 0 0 3px #e7485640;
+}
+.status-dot.d-done.attention {
+  box-shadow: 0 0 0 3px #16c60c40;
 }
 @keyframes pulse {
   50% {
@@ -425,8 +428,7 @@ kbd {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .status-dot.s-working,
-  .status-dot.s-starting {
+  .status-dot.d-working {
     animation: none;
   }
 }

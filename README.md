@@ -20,7 +20,7 @@ You: "great, open a PR"
 - **Looks like a terminal.** Tabs sit in the title bar like Windows Terminal, with a black screen and white text. Small buttons at the top right open search, activity, plugins and settings.
 - **Tabs of real Claude Code.** Each tab runs the `claude` CLI you already have, so slash commands, skills, MCP servers, plugins and `/resume` all work as usual.
 - **Terminal comforts.** Click links to open them in your browser. Paste screenshots straight into the prompt (Hive saves them and hands Claude the file). Drag files in to insert their paths. Shift+Enter adds a newline.
-- **Knows what each session is doing.** Status dots show *working*, *needs permission*, *waiting for you* or *ready*, using Claude Code's own hooks rather than screen-scraping.
+- **Knows what each session is doing.** Each tab has a status dot: orange while Claude is working, red when it needs more from you (permission, a question, folder trust), green when it is done, using Claude Code's own hooks rather than screen-scraping.
 - **Approve from anywhere.** Permission prompts show up as an Allow/Deny bar in Hive and as buttons on your phone.
 - **Phone channels are plugins.** Slack, Telegram and WhatsApp ship with Hive. You can write your own in about 50 lines (see [docs/PLUGINS.md](docs/PLUGINS.md)).
 - **Smart about when to ping.** Messages go to your phone only when you're away (idle or screen locked), after a short grace period. Nothing is sent if you answer at the desk first.

@@ -44,6 +44,16 @@ export function runSmoke(sessions: SessionManager, getWin: () => BrowserWindow |
     app.exit(ok ? 0 : 1)
   }
 
+  const shot = async (name: string) => {
+    try {
+      const img = await getWin()?.webContents.capturePage()
+      if (img) writeFileSync(join(out, `${name}.png`), img.toPNG())
+    } catch {
+      /* ignore */
+    }
+  }
+  let shotWorking = false
+
   const s = sessions.create({ cwd, title: 'Smoke test' })
   const screen = () => sessions.scrollback(s.id).text.replace(ANSI, '')
   note(`created ${s.shortCode} in ${cwd}`)
@@ -61,6 +71,10 @@ export function runSmoke(sessions: SessionManager, getWin: () => BrowserWindow |
 
   sessions.on('update', (u) => {
     if (u.id !== s.id) return
+    if (u.status === 'working' && !shotWorking) {
+      shotWorking = true
+      setTimeout(() => void shot('state-working'), 300)
+    }
     note(`status=${u.status}${u.pending ? ` pending=${u.pending.summary} held=${u.pending.held}` : ''}`)
     if (u.status === 'exited') {
       note(`exit code ${u.exitCode}; output:\n${screen().slice(-3000)}`)
@@ -94,6 +108,7 @@ export function runSmoke(sessions: SessionManager, getWin: () => BrowserWindow |
     sawPermission = true
     if (remote) return note(`permission held: ${p.summary}; waiting for the phone`)
     note(`permission held: ${p.summary}; approving in 1s`)
+    setTimeout(() => void shot('state-permission'), 400)
     setTimeout(() => sessions.answerPermission(s.id, p.requestId, { behavior: 'allow' }), 1000)
   })
 
