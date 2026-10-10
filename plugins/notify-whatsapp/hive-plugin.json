@@ -1,0 +1,64 @@
+{
+  "id": "notify-whatsapp",
+  "name": "WhatsApp (beta)",
+  "version": "0.1.0",
+  "description": "Notifications and replies over the official WhatsApp Business Cloud API. Needs a Meta developer app and the small Hive relay (a free Cloudflare Worker) to receive replies.",
+  "main": "index.js",
+  "hiveApi": 1,
+  "contributes": {
+    "channel": { "id": "whatsapp", "label": "WhatsApp", "supportsReplies": true, "supportsButtons": true }
+  },
+  "settings": [
+    {
+      "key": "accessToken",
+      "label": "Access token",
+      "type": "secret",
+      "required": true,
+      "help": "Meta app → WhatsApp → API Setup. Use a System User token so it doesn't expire after 24h."
+    },
+    {
+      "key": "phoneNumberId",
+      "label": "Phone number ID",
+      "type": "string",
+      "required": true,
+      "help": "Meta app → WhatsApp → API Setup → Phone number ID (not the phone number itself)."
+    },
+    {
+      "key": "recipient",
+      "label": "Your WhatsApp number",
+      "type": "string",
+      "required": true,
+      "placeholder": "15551234567",
+      "help": "Country code + number, digits only. Only this number can answer Hive."
+    },
+    {
+      "key": "relayUrl",
+      "label": "Relay URL",
+      "type": "string",
+      "required": true,
+      "placeholder": "https://hive-whatsapp-relay.<you>.workers.dev",
+      "help": "Where you deployed relay/whatsapp-relay from the Hive repo."
+    },
+    {
+      "key": "relaySecret",
+      "label": "Relay secret",
+      "type": "secret",
+      "required": true,
+      "help": "The RELAY_SECRET you set on the relay."
+    },
+    {
+      "key": "templateName",
+      "label": "Wake-up template (optional)",
+      "type": "string",
+      "placeholder": "hello_world",
+      "help": "WhatsApp only lets businesses message you within 24h of your last message. Outside that window Hive sends this approved template and delivers the real message once you reply."
+    },
+    {
+      "key": "templateLang",
+      "label": "Template language",
+      "type": "string",
+      "default": "en_US"
+    }
+  ],
+  "docs": "WhatsApp needs more setup than Slack or Telegram. See plugins/notify-whatsapp/README.md in the Hive repo.\n\nShort version:\n1. Create a Meta developer app with the WhatsApp product and a business phone number.\n2. Deploy relay/whatsapp-relay (Cloudflare Worker) and point the app's webhook at <relay>/webhook.\n3. Fill in the fields below, enable, and Send test message.\n\nWhatsApp's 24-hour rule: Hive can only message you freely within 24h of your last message to the business number. Send it any message to open the window, or set a wake-up template."
+}

@@ -1,0 +1,16 @@
+name = "hive-whatsapp-relay"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+
+[[durable_objects.bindings]]
+name = "INBOX"
+class_name = "Inbox"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Inbox"]
+
+# Secrets (set with `wrangler secret put <NAME>`):
+#   RELAY_SECRET  shared with Hive; authorizes /poll
+#   VERIFY_TOKEN  entered in Meta's webhook settings
+#   APP_SECRET    Meta app secret; used to verify webhook signatures

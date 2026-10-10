@@ -1,0 +1,21 @@
+{
+  "name": "hive",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A desktop hive for Claude Code sessions: tabs, rich terminal, plugins, history search and phone notifications you can reply to.",
+  "license": "MIT",
+  "workspaces": [
+    "apps/desktop",
+    "packages/plugin-sdk"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w apps/desktop",
+    "build": "npm run build -w apps/desktop",
+    "test": "npm test -w apps/desktop",
+    "typecheck": "npm run typecheck -w apps/desktop",
+    "dist": "npm run dist -w apps/desktop"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

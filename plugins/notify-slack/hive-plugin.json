@@ -1,0 +1,36 @@
+{
+  "id": "notify-slack",
+  "name": "Slack",
+  "version": "0.1.0",
+  "description": "Get a Slack DM when a session needs you. Reply in the thread or tap Approve/Deny. Uses Socket Mode, so no public URL is needed.",
+  "main": "index.js",
+  "hiveApi": 1,
+  "contributes": {
+    "channel": { "id": "slack", "label": "Slack", "supportsReplies": true, "supportsButtons": true }
+  },
+  "settings": [
+    {
+      "key": "botToken",
+      "label": "Bot token (xoxb-…)",
+      "type": "secret",
+      "required": true,
+      "help": "Your Slack app → OAuth & Permissions → Bot User OAuth Token."
+    },
+    {
+      "key": "appToken",
+      "label": "App-level token (xapp-…)",
+      "type": "secret",
+      "required": true,
+      "help": "Your Slack app → Basic Information → App-Level Tokens → create one with the connections:write scope."
+    },
+    {
+      "key": "userId",
+      "label": "Your Slack member ID",
+      "type": "string",
+      "required": true,
+      "placeholder": "U012ABCDEF",
+      "help": "In Slack: your profile → ⋮ → Copy member ID. Only this person can answer Hive."
+    }
+  ],
+  "docs": "1. Go to https://api.slack.com/apps → Create New App → From a manifest. Paste the contents of plugins/notify-slack/slack-app-manifest.yml (in the Hive repo).\n2. Install the app to your workspace. Copy the Bot token (xoxb-…).\n3. Basic Information → App-Level Tokens → Generate with scope connections:write. Copy it (xapp-…).\n4. Paste both tokens and your member ID below, Save, enable, then \"Send test message\".\n\nHive DMs you from the app. Reply in the message's thread, or use the buttons."
+}

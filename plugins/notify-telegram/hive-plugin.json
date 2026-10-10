@@ -1,0 +1,28 @@
+{
+  "id": "notify-telegram",
+  "name": "Telegram",
+  "version": "0.1.0",
+  "description": "Get notified on Telegram and reply to continue. No server or public URL needed.",
+  "main": "index.js",
+  "hiveApi": 1,
+  "contributes": {
+    "channel": { "id": "telegram", "label": "Telegram", "supportsReplies": true, "supportsButtons": true }
+  },
+  "settings": [
+    {
+      "key": "botToken",
+      "label": "Bot token",
+      "type": "secret",
+      "required": true,
+      "placeholder": "123456789:AA…",
+      "help": "Message @BotFather on Telegram, send /newbot, and paste the token it gives you."
+    },
+    {
+      "key": "chatId",
+      "label": "Your chat ID",
+      "type": "string",
+      "help": "Leave empty, save, then send any message to your bot. It replies with your chat ID. Paste it here and save again. Only this chat can control Hive."
+    }
+  ],
+  "docs": "1. In Telegram, open @BotFather → /newbot → pick a name. Copy the token.\n2. Paste the token below, Save, and enable the plugin.\n3. Send any message to your new bot. It answers with your chat ID.\n4. Paste the chat ID below and Save. Then click \"Send test message\".\n\nReply to a notification (swipe → Reply) to route your answer to that session, or start a message with the session code, e.g. \"H7K: run the tests\"."
+}

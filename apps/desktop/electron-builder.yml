@@ -1,0 +1,29 @@
+appId: dev.hive.desktop
+productName: Hive
+directories:
+  buildResources: build
+  output: release/${version}
+files:
+  - out/**
+  - package.json
+  - '!**/*.map'
+extraResources:
+  - from: ../../plugins
+    to: plugins
+    filter: ['**/*', '!**/node_modules/**']
+asarUnpack:
+  - '**/node_modules/node-pty/**'
+win:
+  target: [nsis]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target: [dmg]
+  category: public.app-category.developer-tools
+linux:
+  # .deb also installs on ChromeOS (Linux development environment)
+  target: [AppImage, deb]
+  category: Development
+  maintainer: Hive contributors
+publish: null

@@ -1,0 +1,8 @@
+{
+  "name": "@hive/plugin-sdk",
+  "version": "0.1.0",
+  "description": "Types for writing Hive plugins",
+  "types": "index.d.ts",
+  "files": ["index.d.ts", "README.md"],
+  "license": "MIT"
+}
