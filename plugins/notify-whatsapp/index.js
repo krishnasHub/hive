@@ -16,6 +16,14 @@ function clip(s, n) {
 /** @param {OutboundMessage} m */
 function plain(m) {
   if (m.kind === 'info' || m.kind === 'test') return clip(m.text, 4000)
+  if (m.kind === 'alert') {
+    // Keep the body short so the link and hint survive the 1024-char limit on button messages.
+    const parts = [`*${clip(m.title, 200)}*`]
+    if (m.body) parts.push(clip(m.body, 600))
+    if (m.url) parts.push(`${m.sourceLabel ? `Open in ${m.sourceLabel}` : 'Open'}: ${m.url}`)
+    parts.push('_Reply "mute" to stop alerts from this sender._')
+    return clip(parts.join('\n\n'), 4000)
+  }
   const parts = [`*${m.title}*`]
   if (m.body) parts.push(clip(m.body, 1500))
   if (m.detail) parts.push('```' + clip(m.detail, 1200) + '```')

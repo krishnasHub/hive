@@ -58,3 +58,9 @@ export const PersonIcon = ({ away }: { away: boolean }) => (
     {away && <circle cx="13" cy="3" r="2" fill="#f5b301" stroke="#1b1b1b" strokeWidth={1} />}
   </Svg>
 )
+export const InboxIcon = () => (
+  <Svg>
+    <path d="M2 9l1.8-5.2c.15-.45.55-.8 1.05-.8h6.3c.5 0 .9.35 1.05.8L14 9v3c0 .55-.45 1-1 1H3c-.55 0-1-.45-1-1V9z" />
+    <path d="M2 9h3.2l.8 1.6h4l.8-1.6H14" />
+  </Svg>
+)

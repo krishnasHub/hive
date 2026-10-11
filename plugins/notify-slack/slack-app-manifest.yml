@@ -16,10 +16,27 @@ oauth_config:
       - im:history
       - im:read
       - im:write
+      - users:read
+    # Optional: lets Hive's assistant watch your DMs and @mentions (read-only, as you).
+    user:
+      - im:history
+      - im:read
+      - mpim:history
+      - mpim:read
+      - channels:history
+      - channels:read
+      - groups:history
+      - groups:read
+      - users:read
 settings:
   event_subscriptions:
     bot_events:
       - message.im
+    user_events:
+      - message.im
+      - message.mpim
+      - message.channels
+      - message.groups
   interactivity:
     is_enabled: true
   org_deploy_enabled: false

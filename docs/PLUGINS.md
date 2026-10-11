@@ -69,6 +69,36 @@ module.exports = {
 }
 ```
 
+## Source plugins (the assistant)
+
+A plugin can also be a **source**: it watches something (an inbox, a chat app) and hands new items to Hive. Hive's assistant checks each one against your VIP and mute lists, asks Claude (`claude -p` with Haiku, no tools) whether it matters, and sends an alert through your phone channels if it does. Gmail (`plugins/source-gmail`) is a source. The Slack plugin is both a channel and a source.
+
+Declare it in the manifest:
+
+```jsonc
+"contributes": { "source": { "id": "gmail", "label": "Gmail" } }
+```
+
+Then hand items over as they arrive:
+
+```js
+ctx.source.register({ async test() { return 'Connected.' } }) // powers "Test connection"
+ctx.source.emit([{
+  id: msg.id,                 // stable; items already seen are ignored
+  from: 'jane@acme.com',      // address or handle, matched against VIP/mute lists
+  fromName: 'Jane Doe',
+  subject: 'Prod is down',
+  text: 'Customers cannot log in…', // plain text, keep it under ~4000 characters
+  receivedAt: Date.now(),
+  url: 'https://mail.google.com/…',  // opens the item; shown on the alert
+  where: 'Inbox'
+}])
+```
+
+- Only emit what's new since you started. Don't replay a whole inbox on first run.
+- Item content is treated as untrusted data. It is shown to Claude inside data tags, with no tools available, and it never reaches a Claude Code session automatically.
+- Hive dedupes by `id`, caps how many items it checks a day, and clips long text. Even so, filter cheaply in the plugin first (e.g. skip promotions) to save Claude usage.
+
 ## The context object
 
 | | |
@@ -76,6 +106,7 @@ module.exports = {
 | `ctx.settings` | Values of your declared settings, with secrets decrypted |
 | `ctx.channel.register(impl)` | `impl.send(msg)`, plus optional `impl.test()` and `impl.stop()` |
 | `ctx.channel.reply({ text, threadRef?, actionId?, from? })` | Passes the user's answer to Hive |
+| `ctx.source.register(impl)` / `ctx.source.emit(items)` | For source plugins: `impl.test()`, `impl.stop()`; hand new items to the assistant |
 | `ctx.setStatus('running' \| 'error', message?)` | The status shown in Settings |
 | `ctx.storage.get/set` | Small persistent JSON store (e.g. a polling offset) |
 | `ctx.dataDir` | A private folder for your files |
@@ -91,6 +122,7 @@ Full types are in [`packages/plugin-sdk/index.d.ts`](../packages/plugin-sdk/inde
 - `waiting`: Claude asked a question or is waiting for input.
 - `finished`: a long turn ended. `body` holds Claude's last message.
 - `info`: an acknowledgement ("✓ Approved [H7K]") or an error. `replyTo` is the threadRef to answer under.
+- `alert`: the assistant thinks an email or message needs the user. `url` links to it and `sourceLabel` names the source. `actions` holds Mute sender (`actionId: 'mute'`). Replies in an alert's thread go to the assistant, not to a session. "mute" stops alerts from that sender.
 - `test`: from the Send test message button.
 
 `message.text` is a ready-made plain-text rendering. Use it unless your channel supports richer formatting.

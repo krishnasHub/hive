@@ -23,14 +23,18 @@ export interface RouterDeps {
   channels(): string[]
   sendToChannel(channelId: string, msg: OutboundMessage): Promise<{ threadRef?: string }>
   desktop(msg: OutboundMessage): void
+  /** Is this assistant alert still unseen? (Stops it going to the phone once you've looked.) */
+  alertPending?(alertKey: string): boolean
   log?(text: string): void
 }
 
 interface Ticket {
   msg: OutboundMessage
+  /** Session id, or `alert:<key>` for assistant alerts. */
   sessionId: string
   kind: NotificationKind
   requestId?: string
+  alertKey?: string
   activityAt: number
   createdAt: number
   timer?: unknown
@@ -38,8 +42,10 @@ interface Ticket {
 }
 
 interface ThreadEntry {
-  sessionId: string
+  sessionId?: string
   requestId?: string
+  /** The thread is an assistant alert, not a session. */
+  alertKey?: string
   sentAt: number
 }
 
@@ -48,6 +54,13 @@ export interface ResolvedReply {
   action: ReplyAction
   /** Permission request the reply was aimed at, if any. */
   requestId?: string
+}
+
+/** A reply in the thread of an assistant alert (email, Slack DM), not aimed at a session. */
+export interface AlertReply {
+  alertKey: string
+  text: string
+  actionId?: string
 }
 
 const RECHECK_MS = 15_000
@@ -85,6 +98,28 @@ export class NotificationRouter {
     ticket.timer = this.d.setTimer(() => this.fire(ticket), Math.max(0, s.remoteDelaySec * 1000))
   }
 
+  /**
+   * Assistant alert (an important email, a DM). Desktop toast now; phone after the usual delay and presence
+   * rules, unless you've seen it in the Inbox by then. Replies in its thread come back as an AlertReply.
+   */
+  alert(msg: OutboundMessage, alertKey: string) {
+    const s = this.d.settings()
+    this.d.desktop(msg)
+    if (s.remoteWhen === 'never' || this.d.channels().length === 0) return
+    const ticket: Ticket = {
+      msg,
+      sessionId: `alert:${alertKey}`,
+      kind: 'alert',
+      alertKey,
+      activityAt: 0,
+      createdAt: this.d.now(),
+      sent: false
+    }
+    this.cancel(ticket.sessionId)
+    this.tickets.set(ticket.sessionId, ticket)
+    ticket.timer = this.d.setTimer(() => this.fire(ticket), Math.max(0, s.remoteDelaySec * 1000))
+  }
+
   /** The session moved on (you answered at the desk, or Claude kept going). */
   cancel(sessionId: string) {
     const t = this.tickets.get(sessionId)
@@ -98,9 +133,10 @@ export class NotificationRouter {
   }
 
   private stillRelevant(t: Ticket): boolean {
+    if (this.d.now() - t.createdAt > TICKET_MAX_AGE_MS) return false
+    if (t.kind === 'alert') return t.alertKey ? (this.d.alertPending?.(t.alertKey) ?? true) : false
     const s = this.d.getSession(t.sessionId)
     if (!s) return false
-    if (this.d.now() - t.createdAt > TICKET_MAX_AGE_MS) return false
     switch (t.kind) {
       case 'permission':
         return s.status === 'waiting_permission' && (!t.requestId || s.pending?.requestId === t.requestId)
@@ -127,14 +163,19 @@ export class NotificationRouter {
       return
     }
     this.tickets.delete(t.sessionId)
-    void this.broadcast(t.msg, t.requestId)
+    void this.broadcast(t.msg, t.requestId, t.alertKey)
   }
 
   /** Sends to every running channel and remembers threads so replies route back. */
-  async broadcast(msg: OutboundMessage, requestId?: string): Promise<void> {
+  async broadcast(msg: OutboundMessage, requestId?: string, alertKey?: string): Promise<void> {
     for (const channelId of this.d.channels()) {
       try {
         const { threadRef } = await this.d.sendToChannel(channelId, msg)
+        if (alertKey) {
+          // Alerts never become the "last session" fallback; only replies in their thread reach them.
+          if (threadRef) this.threads.set(`${channelId}|${threadRef}`, { alertKey, sentAt: this.d.now() })
+          continue
+        }
         if (!msg.sessionId) continue
         const entry: ThreadEntry = { sessionId: msg.sessionId, requestId, sentAt: this.d.now() }
         if (threadRef) this.threads.set(`${channelId}|${threadRef}`, entry)
@@ -145,21 +186,29 @@ export class NotificationRouter {
     }
   }
 
-  /** Remembers a thread for a message sent outside broadcast (e.g. an ack). */
-  rememberThread(channelId: string, threadRef: string, sessionId: string) {
-    const entry = { sessionId, sentAt: this.d.now() }
-    this.threads.set(`${channelId}|${threadRef}`, entry)
+  /** Remembers a thread for a message sent outside broadcast (e.g. an ack), so replies to it route back. */
+  rememberThread(channelId: string, threadRef: string, target: { sessionId: string } | { alertKey: string }) {
+    const key = `${channelId}|${threadRef}`
+    if ('alertKey' in target) {
+      this.threads.set(key, { alertKey: target.alertKey, sentAt: this.d.now() })
+      return
+    }
+    // An ack threaded under an existing notification keeps that thread's permission request.
+    const prev = this.threads.get(key)
+    const entry: ThreadEntry = { sessionId: target.sessionId, requestId: prev?.sessionId === target.sessionId ? prev.requestId : undefined, sentAt: this.d.now() }
+    this.threads.set(key, entry)
     this.lastSent.set(channelId, entry)
   }
 
-  /** Works out which session a chat reply is for and what it asks for. */
-  resolveReply(reply: InboundReply): ResolvedReply | { error: string } {
+  /** Works out which session (or assistant alert) a chat reply is for and what it asks for. */
+  resolveReply(reply: InboundReply): ResolvedReply | AlertReply | { error: string } {
     const sessions = this.d.listSessions().filter((s) => s.status !== 'exited' && s.status !== 'dormant')
     let text = reply.text ?? ''
     let entry: ThreadEntry | undefined
     if (reply.threadRef) entry = this.threads.get(`${reply.channelId}|${reply.threadRef}`)
+    if (entry?.alertKey) return { alertKey: entry.alertKey, text, actionId: reply.actionId }
 
-    let session = entry ? this.d.getSession(entry.sessionId) : undefined
+    let session = entry?.sessionId ? this.d.getSession(entry.sessionId) : undefined
     if (!session) {
       const { code, rest } = extractSessionCode(text, sessions.map((s) => s.shortCode))
       if (code) {
@@ -169,7 +218,7 @@ export class NotificationRouter {
     }
     if (!session) {
       const last = this.lastSent.get(reply.channelId)
-      if (last && this.d.now() - last.sentAt < FALLBACK_WINDOW_MS) {
+      if (last?.sessionId && this.d.now() - last.sentAt < FALLBACK_WINDOW_MS) {
         session = this.d.getSession(last.sessionId)
         entry = last
       }
@@ -196,7 +245,8 @@ const KIND_ICON: Record<NotificationKind, string> = {
   finished: '✅',
   waiting: '💬',
   test: '🐝',
-  info: '🐝'
+  info: '🐝',
+  alert: '📬'
 }
 
 export function buildMessage(

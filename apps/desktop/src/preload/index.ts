@@ -61,6 +61,19 @@ const api: HiveApi = {
     list: () => invoke('activity:list'),
     onEntry: (fn) => on('activity:entry', fn)
   },
+  assistant: {
+    list: () => invoke('assistant:list'),
+    stats: () => invoke('assistant:stats'),
+    muteSender: (sender) => invoke('assistant:muteSender', sender),
+    markAllSeen: () => invoke('assistant:markAllSeen'),
+    retryErrors: () => invoke('assistant:retryErrors'),
+    onChange: (fn) => on('assistant:change', fn),
+    onOpenInbox: (fn) => on('assistant:openInbox', fn)
+  },
+  power: {
+    status: () => invoke('power:status'),
+    onStatus: (fn) => on('power:status', fn)
+  },
   app: {
     openExternal: (url) => invoke('app:openExternal', url),
     pickFolder: (defaultPath) => invoke('app:pickFolder', defaultPath),

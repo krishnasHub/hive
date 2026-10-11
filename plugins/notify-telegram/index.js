@@ -20,6 +20,15 @@ function clip(s, n) {
 /** @param {OutboundMessage} m */
 function render(m) {
   if (m.kind === 'info' || m.kind === 'test') return esc(clip(m.text, MAX_LEN))
+  if (m.kind === 'alert') {
+    const parts = [`<b>${esc(clip(m.title, 300))}</b>`]
+    if (m.body) parts.push(esc(clip(m.body, 1800)))
+    if (m.url && /^https?:\/\//i.test(m.url)) {
+      parts.push(`<a href="${esc(m.url).replace(/"/g, '&quot;')}">Open${m.sourceLabel ? ` in ${esc(m.sourceLabel)}` : ''}</a>`)
+    }
+    parts.push('<i>Reply “mute” to stop alerts from this sender.</i>')
+    return clip(parts.join('\n\n'), MAX_LEN)
+  }
   const parts = [`<b>${esc(m.title)}</b>`]
   if (m.body) parts.push(esc(clip(m.body, 1800)))
   if (m.detail) parts.push(`<pre>${esc(clip(m.detail, 1500))}</pre>`)

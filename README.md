@@ -27,6 +27,8 @@ You: "great, open a PR"
 - **Search all your past sessions** (full-text, local) and resume any of them in a new tab.
 - **Tabs survive restarts.** Reopen Hive and each tab resumes its conversation when you click it.
 - **Chime and taskbar badge.** A bell plays when a session needs you or finishes in the background. The taskbar icon shows a red count (the Dock badge on macOS), and the taskbar button flashes until you look.
+- **An assistant for your inbox.** Turn on the Gmail or Slack source and Hive watches for new mail, DMs and @mentions. Claude (Haiku, with no tools, only reading) decides what matters, using your own description of what's important. You get alerted on your phone the same way as for sessions. VIP and mute lists skip the AI entirely. Reply "mute" to an alert to silence that sender. Everything checked is listed in the Inbox.
+- **Keeps working while you're away.** Hive stops the computer sleeping while a session is working. Optionally, on Windows and Linux, closing the lid doesn't stop it either: Hive switches the lid action to "do nothing" and switches it back when the work is done.
 - **Runs in the tray.** Closing the window keeps your sessions and notifications going. Optionally, Hive starts when you log in.
 - **No folder-trust interruptions.** Hive answers Claude's first-run "Do you trust this folder?" for folders you open in Hive (logged in Activity). Turn this off in Settings → General to get a Trust / Cancel bar instead.
 - **Audit log** of every notification and every action taken from your phone.
@@ -41,10 +43,11 @@ Requirements:
 ```sh
 git clone <this repo> hive
 cd hive
-npm install
-npm run dev        # run in development
-npm run dist       # build an installer into apps/desktop/release/
+./start.sh         # macOS / Linux: installs dependencies the first time, builds and starts Hive
+start.bat          # Windows: the same
 ```
+
+Add `--dev` to either script for hot reload while you work on Hive, or `--hidden` to start in the tray. To build an installer instead, run `npm install` then `npm run dist` (output in `apps/desktop/release/`).
 
 Keyboard: `Ctrl+Shift+T` new tab in the current folder, `Ctrl+Shift+N` new tab in another folder, `Ctrl+Shift+W` close tab, `Ctrl+Tab` next tab, `Ctrl+Shift+F` search, `Ctrl+Shift+,` settings (on macOS, use ⌘ instead of Ctrl+Shift).
 
@@ -90,6 +93,7 @@ More detail is in [docs/DESIGN.md](docs/DESIGN.md).
 - Plugin secrets (bot tokens) are encrypted with your OS keychain (`safeStorage`).
 - Each channel accepts replies only from the one account you configure (Slack member ID, Telegram chat ID, WhatsApp number). Anyone else is ignored.
 - Plugins run in their own process but are **trusted code**. Only install plugins you trust.
+- The assistant sends email and message text to Claude (through your own Claude Code login) to decide what matters. It runs `claude -p` with no tools, no MCP servers and no hooks, and the text is marked as untrusted data. Hive keeps the latest 300 items (first 600 characters each) in `~/.hive/assistant.json`.
 - Approving a command from your phone is as powerful as approving it at your desk. Hive only forwards when you're away, and every remote action is logged in **Activity**.
 
 ## Project layout

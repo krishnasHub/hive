@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { HiveSettings, Presence, PresenceMode, SessionInfo } from '@shared/types'
+import type { AssistantItem, HiveSettings, Presence, PresenceMode, SessionInfo } from '@shared/types'
 import { attentionMap, newlyNeedingAttention, type AttentionKind } from '@core/attention'
 import { TerminalView, focusTerminalSoon } from './components/TerminalView'
 import { TitleBar } from './components/TitleBar'
@@ -8,6 +8,7 @@ import { SettingsDialog, type SettingsTab } from './components/SettingsDialog'
 import { SearchDialog } from './components/SearchDialog'
 import { NewSessionDialog } from './components/NewSessionDialog'
 import { ActivityDialog } from './components/ActivityDialog'
+import { InboxDialog, isAlert } from './components/InboxDialog'
 import { wireTerminalData } from './terminals'
 import { playChime } from './chime'
 import { badgeDataUrl } from './badge'
@@ -15,7 +16,7 @@ import { loadRecent, saveRecent } from './recent'
 
 wireTerminalData()
 
-type Dialog = { kind: 'settings'; tab: SettingsTab } | { kind: 'search' } | { kind: 'new' } | { kind: 'activity' } | null
+type Dialog = { kind: 'settings'; tab: SettingsTab } | { kind: 'search' } | { kind: 'new' } | { kind: 'activity' } | { kind: 'inbox' } | null
 
 const isMac = window.hive.platform === 'darwin'
 
@@ -63,6 +64,33 @@ export function App() {
       window.hive.presence.onChange(setPresence)
     ]
     return () => offs.forEach((off) => off())
+  }, [])
+
+  // Assistant Inbox: badge for unseen important items, and a chime when a new one arrives (not for what was there at startup).
+  const [inboxCount, setInboxCount] = useState(0)
+  const soundRef = useRef<{ on: boolean; volume: number }>({ on: false, volume: 0.6 })
+  soundRef.current = { on: !!settings?.notifications.sound, volume: settings?.notifications.soundVolume ?? 0.6 }
+  useEffect(() => {
+    let known: Set<string> | null = null
+    let alive = true
+    const load = () =>
+      void window.hive.assistant.list().then((items: AssistantItem[]) => {
+        if (!alive) return
+        const alerts = items.filter(isAlert)
+        setInboxCount(alerts.filter((i) => !i.seen).length)
+        const arrived = known !== null && alerts.some((i) => !i.seen && !known!.has(i.key))
+        known = new Set(alerts.map((i) => i.key))
+        if (arrived && soundRef.current.on) playChime('needs_you', soundRef.current.volume)
+      })
+    load()
+    const off = window.hive.assistant.onChange(load)
+    // Clicking an alert's desktop notification opens the Inbox.
+    const offOpen = window.hive.assistant.onOpenInbox(() => setDialog({ kind: 'inbox' }))
+    return () => {
+      alive = false
+      off()
+      offOpen()
+    }
   }, [])
 
   // Keep a valid active tab.
@@ -132,6 +160,7 @@ export function App() {
     if (k === 'n') return () => setDialog({ kind: 'new' })
     if (k === 'w') return () => activeId && void closeSession(activeId)
     if (k === 'f') return () => setDialog({ kind: 'search' })
+    if (k === 'i') return () => setDialog({ kind: 'inbox' })
     if (k === ',' || k === '<') return () => setDialog({ kind: 'settings', tab: 'general' })
     if (/^[1-9]$/.test(e.key)) return () => {
       const s = sessions[Number(e.key) - 1]
@@ -200,6 +229,8 @@ export function App() {
         onNewQuick={() => void createSession(quickCwd())}
         onNewIn={(cwd) => void createSession(cwd)}
         onNewChoose={() => setDialog({ kind: 'new' })}
+        inboxCount={inboxCount}
+        onInbox={() => setDialog({ kind: 'inbox' })}
         onSearch={() => setDialog({ kind: 'search' })}
         onActivity={() => setDialog({ kind: 'activity' })}
         onPlugins={() => setDialog({ kind: 'settings', tab: 'plugins' })}
@@ -257,6 +288,9 @@ export function App() {
       )}
       {dialog?.kind === 'settings' && <SettingsDialog initialTab={dialog.tab} settings={settings} onChange={setSettings} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'activity' && <ActivityDialog onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'inbox' && (
+        <InboxDialog onClose={() => setDialog(null)} onOpenPlugins={() => setDialog({ kind: 'settings', tab: 'plugins' })} />
+      )}
     </div>
   )
 }

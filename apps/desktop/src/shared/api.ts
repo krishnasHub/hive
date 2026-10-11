@@ -1,9 +1,12 @@
 // The API the preload script exposes to the renderer as `window.hive`.
 import type {
   ActivityEntry,
+  AssistantItem,
+  AssistantStats,
   HiveSettings,
   IndexStatus,
   PluginInfo,
+  PowerStatus,
   Presence,
   PresenceMode,
   SearchHit,
@@ -62,6 +65,24 @@ export interface HiveApi {
   activity: {
     list(): Promise<ActivityEntry[]>
     onEntry(fn: (e: ActivityEntry) => void): () => void
+  }
+  assistant: {
+    /** Recent items from source plugins, newest first, with their triage verdicts. */
+    list(): Promise<AssistantItem[]>
+    stats(): Promise<AssistantStats>
+    /** Never alert for this sender again (adds to settings.assistant.mutedSenders). */
+    muteSender(sender: string): Promise<void>
+    /** Mark every item as seen (clears the Inbox badge). */
+    markAllSeen(): Promise<void>
+    /** Run triage again on items that errored. */
+    retryErrors(): Promise<void>
+    onChange(fn: () => void): () => void
+    /** Clicking an alert's desktop notification asks the UI to show the Inbox. */
+    onOpenInbox(fn: () => void): () => void
+  }
+  power: {
+    status(): Promise<PowerStatus>
+    onStatus(fn: (s: PowerStatus) => void): () => void
   }
   app: {
     openExternal(url: string): Promise<void>

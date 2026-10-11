@@ -151,5 +151,13 @@ export async function runScreenshots(getWin: () => BrowserWindow | undefined, ou
   await js(`[...document.querySelectorAll('.tabs button')].find(b => b.textContent === 'General').click()`)
   await wait(400)
   await shot('03-general')
+  await js(`[...document.querySelectorAll('.tabs button')].find(b => b.textContent === 'Assistant').click()`)
+  await wait(500)
+  await shot('04-assistant')
+  await js(`document.querySelector('[aria-label="Close"]').click()`)
+  await wait(300)
+  await js(`document.querySelector('[aria-label="Inbox"]').click()`)
+  await wait(600)
+  await shot('05-inbox')
   app.exit(0)
 }

@@ -305,6 +305,23 @@ kbd {
 .tb-btn.away {
   color: var(--accent);
 }
+.badge-wrap {
+  position: relative;
+}
+.tb-badge {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 600 9.5px/14px var(--ui-font);
+  text-align: center;
+  pointer-events: none;
+}
 
 .drag-space {
   flex: 1;
@@ -729,6 +746,48 @@ kbd {
 .pill.starting {
   color: var(--info);
 }
+/* Assistant verdicts. Amber only for what is worth your attention. */
+.pill.v-important,
+.pill.v-vip {
+  color: var(--accent-ink);
+  background: var(--accent);
+  font-weight: 600;
+}
+.pill.v-pending {
+  color: var(--info);
+}
+.pill.v-error {
+  color: var(--danger);
+}
+.pill.v-muted,
+.pill.v-paused {
+  color: var(--faint);
+}
+
+.section-title {
+  margin: 22px 0 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.source-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+.source-msg {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .switch {
   position: relative;
@@ -814,6 +873,76 @@ mark {
   background: #ffffff30;
   color: var(--text);
   border-radius: 2px;
+}
+
+.inbox-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+  margin-bottom: 4px;
+}
+.inbox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.inbox-row {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 9px 12px;
+}
+.inbox-row.new {
+  border-left: 3px solid var(--accent);
+  padding-left: 10px;
+}
+.inbox-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.inbox-sender {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.inbox-where {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
+.inbox-time {
+  flex: none;
+  margin-left: auto;
+}
+.inbox-subject {
+  margin-top: 4px;
+  word-break: break-word;
+}
+.inbox-note {
+  margin-top: 3px;
+  word-break: break-word;
+}
+.inbox-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+.inbox-actions .link.muted {
+  color: var(--muted);
+}
+.inbox-empty {
+  padding: 18px 0 8px;
+}
+.inbox-empty p {
+  margin: 0 0 8px;
 }
 
 .activity {

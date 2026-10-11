@@ -14,6 +14,8 @@ export const DEFAULT_SETTINGS: HiveSettings = {
     autoTrustFolders: true,
     closeToTray: true,
     launchAtLogin: false,
+    keepAwake: true,
+    lidClosed: 'off',
     fontFamily: "'Cascadia Mono', 'Cascadia Code', Consolas, Menlo, 'DejaVu Sans Mono', monospace"
   },
   notifications: {
@@ -26,6 +28,13 @@ export const DEFAULT_SETTINGS: HiveSettings = {
     notifyOn: { permission: true, finished: true, waiting: true },
     interceptPermissions: 'always',
     permissionTimeoutSec: 6 * 60 * 60
+  },
+  assistant: {
+    interests: '',
+    vipSenders: [],
+    mutedSenders: [],
+    model: 'haiku',
+    paused: false
   },
   plugins: {}
 }

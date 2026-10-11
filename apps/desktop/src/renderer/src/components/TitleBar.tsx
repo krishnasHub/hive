@@ -1,7 +1,7 @@
 // Windows Terminal–style title bar: tabs on the left, a new-tab button with a folder menu, tools on the right.
 import { useState } from 'react'
 import type { Presence, PresenceMode, SessionInfo } from '@shared/types'
-import { ActivityIcon, ChevronDownIcon, CloseIcon, FolderIcon, GearIcon, PersonIcon, PlusIcon, PluginIcon, SearchIcon } from './Icons'
+import { ActivityIcon, ChevronDownIcon, CloseIcon, FolderIcon, GearIcon, InboxIcon, PersonIcon, PlusIcon, PluginIcon, SearchIcon } from './Icons'
 import { Menu, type MenuItem } from './Menu'
 import { StatusDot, statusLabel } from './StatusDot'
 import { basename } from '../recent'
@@ -19,6 +19,9 @@ interface Props {
   onNewQuick(): void
   onNewIn(cwd: string): void
   onNewChoose(): void
+  /** Unseen important items in the assistant Inbox. */
+  inboxCount: number
+  onInbox(): void
   onSearch(): void
   onActivity(): void
   onPlugins(): void
@@ -119,6 +122,15 @@ export function TitleBar(p: Props) {
           </button>
           {menu === 'presence' && <Menu items={presenceItems} onClose={() => setMenu(null)} align="right" />}
         </div>
+        <button
+          className="tb-btn badge-wrap"
+          onClick={p.onInbox}
+          title={`Inbox${p.inboxCount ? `: ${p.inboxCount} new` : ''} (${p.platform === 'darwin' ? '⌘' : 'Ctrl+Shift+'}I)`}
+          aria-label="Inbox"
+        >
+          <InboxIcon />
+          {p.inboxCount > 0 && <span className="tb-badge">{p.inboxCount > 9 ? '9+' : p.inboxCount}</span>}
+        </button>
         <button className="tb-btn" onClick={p.onSearch} title={`Search past sessions (${mod}F)`} aria-label="Search">
           <SearchIcon />
         </button>

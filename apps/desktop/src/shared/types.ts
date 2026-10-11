@@ -71,6 +71,85 @@ export interface GeneralSettings {
   closeToTray: boolean
   launchAtLogin: boolean
   trayHintShown?: boolean
+  /** Stop the computer sleeping on its idle timer while a session is working (or holding a permission prompt). */
+  keepAwake: boolean
+  /** Also keep running with the lid closed while sessions work, by switching the OS lid action temporarily. */
+  lidClosed: LidMode
+}
+
+export type LidMode = 'off' | 'plugged-in' | 'always'
+
+export interface PowerStatus {
+  /** Hive is currently blocking idle sleep. */
+  blocking: boolean
+  /** Sessions keeping the computer awake right now. */
+  activeSessions: number
+  lid: {
+    /** Whether this OS/machine lets Hive override the lid action at all. */
+    supported: boolean
+    /** Hive has changed the lid action and will restore it when sessions finish. */
+    engaged: boolean
+    /** Human-readable note: why unsupported, last error, or what is in effect. */
+    message?: string
+  }
+}
+
+export interface AssistantSettings {
+  /** Plain-language description of what matters, given to the triage model. */
+  interests: string
+  /** Senders that always alert (no AI triage). Email address, @domain, or name; one per entry. */
+  vipSenders: string[]
+  /** Senders that never alert. Same format as vipSenders. */
+  mutedSenders: string[]
+  /** Model alias for `claude -p` triage, e.g. "haiku". */
+  model: string
+  /** Pause all triage and alerts without turning source plugins off. */
+  paused: boolean
+}
+
+// ---- assistant (sources → triage → alerts) ----
+
+/** Something a source plugin noticed (an email, a Slack DM, ...). Untrusted content. */
+export interface SourceItem {
+  /** Stable id within the source (dedupe key). */
+  id: string
+  from: string
+  /** Display name of the sender, if known. */
+  fromName?: string
+  subject?: string
+  /** Plain-text body or message, already trimmed by the plugin (Hive clips to 4000 chars). */
+  text: string
+  receivedAt: number
+  /** Link that opens the item in its app (Gmail web, Slack permalink, ...). */
+  url?: string
+  /** Where it came from inside the source, e.g. "Inbox", "#general", "DM". */
+  where?: string
+}
+
+export type AssistantVerdict = 'pending' | 'important' | 'not_important' | 'vip' | 'muted' | 'paused' | 'error'
+
+export interface AssistantItem extends SourceItem {
+  /** `${sourceId}:${id}` */
+  key: string
+  sourceId: string
+  sourceLabel: string
+  verdict: AssistantVerdict
+  /** One-line reason from triage (or why it was skipped). */
+  reason?: string
+  /** One-line summary for the alert. */
+  summary?: string
+  /** A light one-liner to go with the alert (empty for serious matters). */
+  quip?: string
+  triagedAt?: number
+  /** You've looked at it in the Inbox. */
+  seen?: boolean
+}
+
+export interface AssistantStats {
+  triagedToday: number
+  alertsToday: number
+  lastRunAt?: number
+  lastError?: string
 }
 
 export interface PluginState {
@@ -81,6 +160,7 @@ export interface PluginState {
 export interface HiveSettings {
   general: GeneralSettings
   notifications: NotificationSettings
+  assistant: AssistantSettings
   plugins: Record<string, PluginState>
 }
 
@@ -111,6 +191,8 @@ export interface PluginManifest {
   hiveApi: number
   contributes?: {
     channel?: { id: string; label: string; supportsReplies?: boolean; supportsButtons?: boolean }
+    /** The plugin feeds items (emails, messages) to the assistant via ctx.source.emit. */
+    source?: { id: string; label: string }
   }
   settings?: PluginSettingField[]
   docs?: string
@@ -131,10 +213,10 @@ export interface PluginInfo {
 
 // ---- notifications ----
 
-export type NotificationKind = 'permission' | 'finished' | 'waiting' | 'test' | 'info'
+export type NotificationKind = 'permission' | 'finished' | 'waiting' | 'test' | 'info' | 'alert'
 
 export interface OutboundAction {
-  id: 'approve' | 'deny' | 'stop' | 'status'
+  id: 'approve' | 'deny' | 'stop' | 'status' | 'mute'
   label: string
 }
 
@@ -154,6 +236,10 @@ export interface OutboundMessage {
   text: string
   /** For 'info' acks: the thread to answer in (a threadRef this channel returned or received). */
   replyTo?: string
+  /** For 'alert': link to open the item (email, Slack message). */
+  url?: string
+  /** For 'alert': which source raised it, e.g. "Gmail". */
+  sourceLabel?: string
 }
 
 export interface InboundReply {

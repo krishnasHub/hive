@@ -1,9 +1,17 @@
 import { useEffect, useState } from 'react'
-import type { HiveSettings, NotificationSettings, PluginInfo, PluginSettingField } from '@shared/types'
+import type { AssistantSettings, HiveSettings, LidMode, NotificationSettings, PluginInfo, PluginSettingField, PowerStatus } from '@shared/types'
 import { Modal } from './Modal'
 import { playChime } from '../chime'
+import { statsLine, useAssistantStats } from './InboxDialog'
 
-export type SettingsTab = 'plugins' | 'notifications' | 'general'
+export type SettingsTab = 'plugins' | 'assistant' | 'notifications' | 'general'
+
+const TAB_LABELS: Record<SettingsTab, string> = {
+  general: 'General',
+  notifications: 'Notifications',
+  assistant: 'Assistant',
+  plugins: 'Plugins'
+}
 
 interface Props {
   initialTab?: SettingsTab
@@ -19,30 +27,43 @@ export function SettingsDialog({ initialTab = 'general', settings, onChange, onC
   return (
     <Modal title="Settings" onClose={onClose} wide>
       <div className="tabs">
-        {(['general', 'notifications', 'plugins'] as SettingsTab[]).map((t) => (
+        {(['general', 'notifications', 'assistant', 'plugins'] as SettingsTab[]).map((t) => (
           <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>
-            {t === 'plugins' ? 'Plugins' : t === 'notifications' ? 'Notifications' : 'General'}
+            {TAB_LABELS[t]}
           </button>
         ))}
       </div>
-      {tab === 'plugins' && <Channels />}
+      {tab === 'plugins' && <Plugins />}
       {tab === 'notifications' && <Notifications value={settings.notifications} onSave={(n) => save({ notifications: n })} />}
+      {tab === 'assistant' && <Assistant settings={settings} onSave={(a) => save({ assistant: a })} onPlugins={() => setTab('plugins')} />}
       {tab === 'general' && <General settings={settings} onSave={save} />}
     </Modal>
   )
 }
 
-// ---------------- channels (notification plugins) ----------------
+// ---------------- plugins: phone channels and sources ----------------
 
-function Channels() {
+function usePlugins() {
   const [plugins, setPlugins] = useState<PluginInfo[]>([])
-  const [open, setOpen] = useState<string | null>(null)
   useEffect(() => {
     const load = () => void window.hive.plugins.list().then(setPlugins)
     load()
     return window.hive.plugins.onChange(load)
   }, [])
-  const channels = plugins.filter((p) => p.manifest.contributes?.channel)
+  return plugins
+}
+
+const isChannel = (p: PluginInfo) => !!p.manifest.contributes?.channel
+const isSource = (p: PluginInfo) => !!p.manifest.contributes?.source
+
+function Plugins() {
+  const plugins = usePlugins()
+  const [open, setOpen] = useState<string | null>(null)
+  const channels = plugins.filter(isChannel)
+  const sources = plugins.filter((p) => isSource(p) && !isChannel(p))
+  const card = (p: PluginInfo) => (
+    <PluginCard key={p.manifest.id} plugin={p} open={open === p.manifest.id} onToggleOpen={() => setOpen(open === p.manifest.id ? null : p.manifest.id)} />
+  )
   return (
     <div>
       <p className="muted">
@@ -56,10 +77,16 @@ function Channels() {
         </button>{' '}
         and restart Hive. Writing your own takes about 50 lines; see docs/PLUGINS.md in the Hive repo.
       </p>
-      {channels.map((p) => (
-        <PluginCard key={p.manifest.id} plugin={p} open={open === p.manifest.id} onToggleOpen={() => setOpen(open === p.manifest.id ? null : p.manifest.id)} />
-      ))}
+      {channels.map(card)}
       {channels.length === 0 && <div className="muted">No channel plugins found.</div>}
+
+      <h3 className="section-title">Sources</h3>
+      <p className="muted">
+        Sources watch places like Gmail and Slack and hand new messages to the assistant. Claude reads them and alerts you only about the
+        ones that matter. Set what matters in the Assistant tab.
+      </p>
+      {sources.map(card)}
+      {sources.length === 0 && <div className="muted">No source plugins found.</div>}
     </div>
   )
 }
@@ -80,6 +107,7 @@ function PluginCard({ plugin, open, onToggleOpen }: { plugin: PluginInfo; open: 
         <div>
           <div className="plugin-name">
             {m.name} {!plugin.builtin && <span className="tag">custom</span>}
+            {isChannel(plugin) && isSource(plugin) && <span className="tag">also a source</span>}
           </div>
           <div className="muted small">{m.description}</div>
         </div>
@@ -109,7 +137,7 @@ function PluginCard({ plugin, open, onToggleOpen }: { plugin: PluginInfo; open: 
                 setBusy(false)
               }}
             >
-              Send test message
+              {isChannel(plugin) ? 'Send test message' : 'Test connection'}
             </button>
             <button className="primary" disabled={!dirty} onClick={() => void window.hive.plugins.configure(m.id, values)}>
               Save
@@ -267,12 +295,139 @@ function Notifications({ value, onSave }: { value: NotificationSettings; onSave(
   )
 }
 
+// ---------------- assistant (sources -> triage -> alerts) ----------------
+
+const DEFAULT_ASSISTANT: AssistantSettings = { interests: '', vipSenders: [], mutedSenders: [], model: 'haiku', paused: false }
+const MODELS = [
+  { value: 'haiku', label: 'Haiku (fast, cheapest)' },
+  { value: 'sonnet', label: 'Sonnet (more careful)' }
+]
+
+const lines = (text: string) => [...new Set(text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean))]
+
+function Assistant({ settings, onSave, onPlugins }: { settings: HiveSettings; onSave(a: AssistantSettings): void; onPlugins(): void }) {
+  const init = { ...DEFAULT_ASSISTANT, ...settings.assistant }
+  const [a, setA] = useState(init)
+  const [vip, setVip] = useState(init.vipSenders.join('\n'))
+  const [muted, setMuted] = useState(init.mutedSenders.join('\n'))
+  const stats = useAssistantStats()
+  const sources = usePlugins().filter(isSource)
+
+  // "Mute sender" in the Inbox changes mutedSenders behind our back; start from the stored list so Save doesn't undo it.
+  useEffect(() => {
+    void window.hive.settings.get().then((s) => {
+      const fresh = { ...DEFAULT_ASSISTANT, ...s.assistant }
+      setA(fresh)
+      setVip(fresh.vipSenders.join('\n'))
+      setMuted(fresh.mutedSenders.join('\n'))
+    })
+  }, [])
+
+  const models = MODELS.some((m) => m.value === a.model) ? MODELS : [...MODELS, { value: a.model, label: a.model }]
+
+  return (
+    <div>
+      <p className="muted">
+        <strong className="text">Assistant.</strong> Source plugins watch Gmail and Slack. Claude (Haiku, no tools, reads only) decides which new
+        messages are worth an alert. Hive shows those as a desktop notification and sends them to your phone channels, using the rules in
+        Notifications.
+      </p>
+      <label className="field">
+        <span>What matters to me</span>
+        <textarea
+          rows={4}
+          value={a.interests}
+          placeholder="e.g. messages from my manager, production incidents, anything about invoices or contracts, travel changes"
+          onChange={(e) => setA({ ...a, interests: e.target.value })}
+        />
+        <small className="muted">Plain language. Claude reads this when it decides whether to alert you.</small>
+      </label>
+      <div className="grid2">
+        <label className="field">
+          <span>Always alert me about</span>
+          <textarea rows={4} value={vip} placeholder={'boss@company.com\n@bigclient.com\nJane Doe'} onChange={(e) => setVip(e.target.value)} spellCheck={false} />
+          <small className="muted">One sender per line: email address, @domain, or name. Skips Claude.</small>
+        </label>
+        <label className="field">
+          <span>Never alert me about</span>
+          <textarea rows={4} value={muted} placeholder={'newsletter@shop.com\n@notifications.github.com'} onChange={(e) => setMuted(e.target.value)} spellCheck={false} />
+          <small className="muted">One sender per line. They still show in the Inbox.</small>
+        </label>
+      </div>
+      <div className="grid2">
+        <label className="field">
+          <span>Model</span>
+          <select value={a.model} onChange={(e) => setA({ ...a, model: e.target.value })}>
+            {models.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="field">
+          <span>&nbsp;</span>
+          <label className="field inline">
+            <input type="checkbox" checked={a.paused} onChange={(e) => setA({ ...a, paused: e.target.checked })} />
+            Pause alerts (sources keep collecting, nothing is checked or sent)
+          </label>
+        </div>
+      </div>
+      <div className="muted small">
+        {statsLine(stats)}
+        {stats?.lastError && <div className="error">{stats.lastError}</div>}
+      </div>
+      <div className="row end">
+        <button className="primary" onClick={() => onSave({ ...a, vipSenders: lines(vip), mutedSenders: lines(muted) })}>
+          Save
+        </button>
+      </div>
+
+      <h3 className="section-title">Sources</h3>
+      {sources.length === 0 && <div className="muted small">No source plugins installed yet.</div>}
+      {sources.map((p) => {
+        const state = p.enabled ? p.runState : 'disabled'
+        return (
+          <div key={p.manifest.id} className="source-row">
+            <span>{p.manifest.contributes?.source?.label ?? p.manifest.name}</span>
+            <span className={`small source-msg ${state === 'error' ? 'error' : 'muted'}`}>{p.statusMessage}</span>
+            <span className={`pill ${state}`}>{state}</span>
+          </div>
+        )
+      })}
+      <div className="row end">
+        <button onClick={onPlugins}>Set up sources in Plugins</button>
+      </div>
+    </div>
+  )
+}
+
 // ---------------- general ----------------
+
+function powerLine(st: PowerStatus, keepAwake: boolean): string {
+  const n = st.activeSessions
+  const awake = st.blocking
+    ? `Keeping awake: ${n} session${n === 1 ? '' : 's'} working`
+    : keepAwake
+      ? 'Not keeping awake right now: no sessions working'
+      : 'Sleeping as usual'
+  const lid = !st.lid.supported
+    ? (st.lid.message ?? 'Lid setting is not supported on this computer')
+    : st.lid.engaged
+      ? `Lid closed: keeps running${st.lid.message ? ` (${st.lid.message})` : ''}`
+      : st.lid.message
+  return lid ? `${awake} · ${lid}` : awake
+}
 
 function General({ settings, onSave }: { settings: HiveSettings; onSave(p: Partial<HiveSettings>): void }) {
   const [g, setG] = useState(settings.general)
   const [detected, setDetected] = useState<string | null>(null)
+  const [power, setPower] = useState<PowerStatus | null>(null)
   useEffect(() => void window.hive.settings.detectClaude().then(setDetected), [])
+  useEffect(() => {
+    void window.hive.power.status().then(setPower)
+    return window.hive.power.onStatus(setPower)
+  }, [])
   return (
     <div>
       <label className="field">
@@ -311,6 +466,25 @@ function General({ settings, onSave }: { settings: HiveSettings; onSave(p: Parti
         <input type="checkbox" checked={g.launchAtLogin} onChange={(e) => setG({ ...g, launchAtLogin: e.target.checked })} />
         Start Hive when I log in (in the tray)
       </label>
+      <div className="field">
+        <span>Power</span>
+        <label className="field inline">
+          <input type="checkbox" checked={g.keepAwake} onChange={(e) => setG({ ...g, keepAwake: e.target.checked })} />
+          Keep this computer awake while Claude is working
+        </label>
+        <label className="field">
+          <span className="muted">When the lid is closed</span>
+          <select value={g.lidClosed} disabled={!g.keepAwake} onChange={(e) => setG({ ...g, lidClosed: e.target.value as LidMode })}>
+            <option value="off">Sleep as usual</option>
+            <option value="plugged-in">Keep running when plugged in</option>
+            <option value="always">Keep running, also on battery</option>
+          </select>
+          <small className="muted">
+            Only while sessions are working; Hive puts your lid setting back afterwards. A laptop left running in a bag can get hot.
+          </small>
+        </label>
+        {power && <small className={power.blocking ? 'text' : 'muted'}>{powerLine(power, settings.general.keepAwake)}</small>}
+      </div>
       <div className="grid2">
         <label className="field">
           <span>Font size</span>

@@ -1,12 +1,13 @@
 {
   "id": "notify-slack",
   "name": "Slack",
-  "version": "0.1.0",
-  "description": "Get a Slack DM when a session needs you. Reply in the thread or tap Approve/Deny. Uses Socket Mode, so no public URL is needed.",
+  "version": "0.2.0",
+  "description": "Get a Slack DM when a session needs you. Reply in the thread or tap Approve/Deny. Optionally lets the assistant watch your Slack DMs and @mentions and alert you about the important ones. Uses Socket Mode, so no public URL is needed.",
   "main": "index.js",
   "hiveApi": 1,
   "contributes": {
-    "channel": { "id": "slack", "label": "Slack", "supportsReplies": true, "supportsButtons": true }
+    "channel": { "id": "slack", "label": "Slack", "supportsReplies": true, "supportsButtons": true },
+    "source": { "id": "slack", "label": "Slack" }
   },
   "settings": [
     {
@@ -30,7 +31,26 @@
       "required": true,
       "placeholder": "U012ABCDEF",
       "help": "In Slack: your profile → ⋮ → Copy member ID. Only this person can answer Hive."
+    },
+    {
+      "key": "userToken",
+      "label": "User OAuth Token (xoxp-…)",
+      "type": "secret",
+      "required": false,
+      "help": "Optional, for watching your DMs and @mentions. Your Slack app → OAuth & Permissions → User OAuth Token, shown after you reinstall the app with the updated manifest."
+    },
+    {
+      "key": "watch",
+      "label": "Watch for the assistant",
+      "type": "select",
+      "default": "dms-mentions",
+      "options": [
+        { "value": "off", "label": "Off" },
+        { "value": "dms", "label": "My DMs" },
+        { "value": "dms-mentions", "label": "My DMs and @mentions" }
+      ],
+      "help": "Messages people send you are passed to Hive's assistant, which alerts you here about the ones that need you. Needs the User OAuth Token."
     }
   ],
-  "docs": "1. Go to https://api.slack.com/apps → Create New App → From a manifest. Paste the contents of plugins/notify-slack/slack-app-manifest.yml (in the Hive repo).\n2. Install the app to your workspace. Copy the Bot token (xoxb-…).\n3. Basic Information → App-Level Tokens → Generate with scope connections:write. Copy it (xapp-…).\n4. Paste both tokens and your member ID below, Save, enable, then \"Send test message\".\n\nHive DMs you from the app. Reply in the message's thread, or use the buttons."
+  "docs": "1. Go to https://api.slack.com/apps → Create New App → From a manifest. Paste the contents of plugins/notify-slack/slack-app-manifest.yml (in the Hive repo).\n2. Install the app to your workspace. Copy the Bot token (xoxb-…).\n3. Basic Information → App-Level Tokens → Generate with scope connections:write. Copy it (xapp-…).\n4. Paste both tokens and your member ID below, Save, enable, then \"Send test message\".\n\nHive DMs you from the app. Reply in the message's thread, or use the buttons.\n\nTo let the assistant watch your DMs and @mentions: if you created the app from an older manifest, open it at https://api.slack.com/apps → App Manifest, replace it with the current slack-app-manifest.yml and Save. Then OAuth & Permissions → Reinstall to Workspace, copy the User OAuth Token (xoxp-…) into the field below, and pick what to watch. Hive only reads; it never posts as you."
 }

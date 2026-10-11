@@ -47,7 +47,7 @@ jobs.
 | UI | React + TypeScript + Vite | |
 | Terminal | **xterm.js** (+ `addon-web-links`, `addon-webgl`, `addon-search`, `addon-fit`, `addon-unicode11`) | Same engine as VS Code's terminal |
 | PTY | `node-pty` | ConPTY on Windows, forkpty on mac/Linux |
-| Local DB | SQLite (`better-sqlite3`) with **FTS5** (+ optional `sqlite-vec` for semantic search) | Single file, fast, no server |
+| Local DB | SQLite (`node:sqlite`, in a worker) with **FTS5** (+ optional `sqlite-vec` for semantic search) | Single file, fast, no server |
 | Secrets | OS keychain via Electron `safeStorage` | OAuth tokens for Gmail/Slack/etc. |
 | Packaging | `electron-builder` | `.exe`/MSIX, `.dmg`, `.deb`/AppImage |
 
@@ -322,12 +322,11 @@ run sessions on a home server/VM with Hive as a client.
 ## 14. Repo layout (monorepo, npm workspaces)
 ```
 hive/
-  apps/desktop/           # Electron main + preload + renderer
-  packages/plugin-sdk/    # @hive/plugin-sdk
-  packages/hook-client/   # hive-hook script/binary
-  packages/core/          # session state machine, router, indexer (pure TS, testable)
-  plugins/slack/  plugins/telegram/  plugins/gmail/  plugins/outlook/  plugins/whatsapp/
-  relay/                  # Cloudflare Worker (optional)
+  apps/desktop/           # Electron app: src/core (pure, tested), src/main, src/preload, src/renderer
+  packages/plugin-sdk/    # @hive/plugin-sdk type definitions
+  plugins/                # built-in plugins: notify-slack (channel + source), notify-telegram,
+                          # notify-whatsapp, source-gmail
+  relay/whatsapp-relay/   # Cloudflare Worker (optional)
   docs/
 ```
 
@@ -358,5 +357,20 @@ hive/
   Allow/Deny bar, presence-aware notification router, plugin host, remote reply loop (with a
   mock channel), history index + search, resumable tabs.
 - **Not yet verified with live accounts:** the Slack/Telegram/WhatsApp plugins themselves.
-- **Next:** Library (agents/MCP import, §8), Gmail/Outlook connectors, split panes, command
-  palette, code signing + auto-update, folder-trust banner, plugin permission enforcement.
+- **Assistant (Oct 2026):** source plugins (`contributes.source`, `ctx.source.emit`) feed items to
+  `main/assistant.ts`. Mute/VIP rules come first, then batched triage through `claude -p --model haiku
+  --tools "" --strict-mcp-config --setting-sources "" --no-session-persistence --json-schema …` (uses
+  the user's own login; about 2 s and 1.3k tokens per batch). Important items become `alert`
+  notifications through the same router (presence, delay, channels). Replies in an alert thread
+  go to the assistant ("mute"), never to a session. Gmail uses IMAP plus an app password: OAuth's
+  restricted Gmail scopes would need Google verification, and in testing mode tokens expire after
+  7 days. Slack watching lives in the Slack channel plugin, because Socket Mode spreads events
+  across all connections of one app. There's no WhatsApp source: the official API can't read
+  personal chats, and unofficial clients risk a ban.
+- **Keep awake:** `powerSaveBlocker('prevent-app-suspension')` while sessions work or hold a
+  permission prompt. With the opt-in lid setting, Windows temporarily sets the power-plan LIDACTION
+  to 0, with the originals saved in `~/.hive/lid-override.json` and restored on quit or the next
+  start. Linux holds `systemd-inhibit --what=handle-lid-switch`. macOS can't do this without sudo.
+  No app can block a sleep the user chooses.
+- **Next:** Outlook source (Microsoft Graph, device-code sign-in), Library (agents/MCP import, §8),
+  split panes, command palette, code signing + auto-update, plugin permission enforcement.

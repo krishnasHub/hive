@@ -2,7 +2,7 @@
 // Use from plain JS with:  /** @param {import('@hive/plugin-sdk').PluginContext} ctx */
 
 export interface OutboundAction {
-  id: 'approve' | 'deny' | 'stop' | 'status'
+  id: 'approve' | 'deny' | 'stop' | 'status' | 'mute'
   label: string
 }
 
@@ -10,8 +10,9 @@ export interface OutboundAction {
 export interface OutboundMessage {
   id: string
   /** permission: Claude wants to run a tool. finished: a long turn ended. waiting: Claude asked you something.
-   *  test: "Send test message". info: an acknowledgement or error, usually threaded under `replyTo`. */
-  kind: 'permission' | 'finished' | 'waiting' | 'test' | 'info'
+   *  test: "Send test message". info: an acknowledgement or error, usually threaded under `replyTo`.
+   *  alert: the assistant thinks something a source plugin saw (an email, a DM) needs the user. */
+  kind: 'permission' | 'finished' | 'waiting' | 'test' | 'info' | 'alert'
   sessionId?: string
   /** Short code like "H7K" that identifies the session in replies. */
   sessionCode?: string
@@ -27,6 +28,10 @@ export interface OutboundMessage {
   text: string
   /** For `info` messages: a threadRef to reply under. */
   replyTo?: string
+  /** For `alert` messages: link that opens the item (email, Slack message). */
+  url?: string
+  /** For `alert` messages: the source that raised it, e.g. "Gmail". */
+  sourceLabel?: string
 }
 
 export interface SendResult {
@@ -51,6 +56,30 @@ export interface InboundReply {
   from?: string
 }
 
+/** Something a source plugin noticed. Hive dedupes by `id`, triages it with Claude, and alerts if it matters. */
+export interface SourceItem {
+  /** Stable, unique within your source (e.g. Gmail message id). Items with an id already seen are ignored. */
+  id: string
+  /** Sender address or handle, used for VIP/mute matching (e.g. "jane@acme.com", "U012ABC"). */
+  from: string
+  fromName?: string
+  subject?: string
+  /** Plain text. Keep it under ~4000 characters; Hive clips longer text. */
+  text: string
+  /** ms since epoch */
+  receivedAt: number
+  /** Opens the item in its app. */
+  url?: string
+  /** Where it was found, e.g. "Inbox", "#general", "DM". */
+  where?: string
+}
+
+export interface SourceImpl {
+  /** Called by "Test connection". Return a short status string or throw. */
+  test?(): Promise<string | void> | string | void
+  stop?(): Promise<void> | void
+}
+
 export interface PluginContext {
   hiveApi: 1
   /** Values for the fields declared in hive-plugin.json (secrets decrypted). Restarted on change. */
@@ -66,6 +95,12 @@ export interface PluginContext {
     register(impl: ChannelImpl): void
     /** Deliver a reply from the user to Hive. */
     reply(reply: InboundReply): void
+  }
+  /** For plugins that declare `contributes.source`. */
+  source: {
+    register(impl: SourceImpl): void
+    /** Hand new items to Hive. Content is treated as untrusted data. */
+    emit(items: SourceItem[]): void
   }
 }
 

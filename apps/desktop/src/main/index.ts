@@ -5,10 +5,12 @@ import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ActivityEntry, HiveSettings, InboundReply, OutboundMessage, PresenceMode, SessionInfo } from '@shared/types'
 import { infoMessage, NotificationRouter, statusText } from '@core/notificationRouter'
+import { Assistant } from './assistant'
 import { HistoryIndex } from './history'
 import { HookServer } from './hookServer'
 import { ensureDirs, paths } from './paths'
 import { PluginHost } from './pluginHost'
+import { PowerManager } from './power'
 import { PresenceTracker } from './presence'
 import { SessionManager } from './sessionManager'
 import { SettingsStore } from './store'
@@ -40,6 +42,7 @@ const sessions = new SessionManager(store, () => presence.get())
 const hooks = new HookServer(sessions.handleHook)
 const plugins = new PluginHost(store)
 const history = new HistoryIndex()
+const power = new PowerManager({ stateFile: paths.lidState, log: (text) => logActivity(text) })
 let win: BrowserWindow | undefined
 
 // ---------- activity log (audit trail of notifications and remote actions) ----------
@@ -59,7 +62,7 @@ function logActivity(text: string, session?: SessionInfo) {
 
 // ---------- notifications ----------
 
-const router = new NotificationRouter({
+const router: NotificationRouter = new NotificationRouter({
   now: () => Date.now(),
   setTimer: (fn, ms) => setTimeout(fn, ms),
   clearTimer: (h) => clearTimeout(h as NodeJS.Timeout),
@@ -75,8 +78,11 @@ const router = new NotificationRouter({
     return r
   },
   desktop: (msg) => showToast(msg),
+  alertPending: (key): boolean => assistant.isPending(key),
   log: (text) => logActivity(text)
 })
+
+const assistant: Assistant = new Assistant({ store, router, newId: () => randomUUID(), log: (text) => logActivity(text) })
 
 function showToast(msg: OutboundMessage) {
   if (!Notification.isSupported()) return
@@ -90,7 +96,8 @@ function showToast(msg: OutboundMessage) {
     if (win.isMinimized()) win.restore()
     win.show()
     win.focus()
-    if (msg.sessionId) win.webContents.send('sessions:focus', msg.sessionId)
+    if (msg.kind === 'alert') win.webContents.send('assistant:openInbox')
+    else if (msg.sessionId) win.webContents.send('sessions:focus', msg.sessionId)
   })
   n.show()
 }
@@ -122,9 +129,12 @@ sessions.on('permission', (s, pending) => {
 
 // ---------- replies from your phone ----------
 
-async function ack(reply: InboundReply, text: string, session?: SessionInfo) {
+async function ack(reply: InboundReply, text: string, session?: SessionInfo, alertKey?: string) {
   try {
-    await plugins.send(reply.channelId, infoMessage(randomUUID(), text, reply.threadRef, session))
+    const { threadRef } = await plugins.send(reply.channelId, infoMessage(randomUUID(), text, reply.threadRef, session))
+    // Replying to the ack itself should reach the same place.
+    if (threadRef && session) router.rememberThread(reply.channelId, threadRef, { sessionId: session.id })
+    else if (threadRef && alertKey) router.rememberThread(reply.channelId, threadRef, { alertKey })
   } catch (err) {
     logActivity(`Could not reply on ${reply.channelId}: ${(err as Error).message}`)
   }
@@ -132,31 +142,40 @@ async function ack(reply: InboundReply, text: string, session?: SessionInfo) {
 
 async function handleReply(reply: InboundReply) {
   const r = router.resolveReply(reply)
+  const who = `${reply.channelId}${reply.from ? ` (${reply.from})` : ''}`
   if ('error' in r) {
     logActivity(`← ${reply.channelId}: "${reply.text}" (not routed: ${r.error})`)
     return ack(reply, r.error)
   }
+  if ('alertKey' in r) {
+    logActivity(`← ${who}: "${r.text || r.actionId}" on an alert`)
+    return ack(reply, assistant.handleReply(r.alertKey, r.text, r.actionId), undefined, r.alertKey)
+  }
   const { session, action } = r
-  const who = `${reply.channelId}${reply.from ? ` (${reply.from})` : ''}`
   const pending = session.pending
+  // Claude's own permission dialog is up (Hive isn't holding it): answer with keys instead of typing text into it.
+  const dialog = !pending && session.status === 'waiting_permission'
+  const what = pending?.summary ?? 'the permission prompt'
   const tag = `[${session.shortCode}]`
 
   switch (action.type) {
     case 'approve':
-      if (pending) {
-        sessions.answerPermission(session.id, pending.requestId, { behavior: 'allow' })
-        logActivity(`← ${who}: approved ${pending.summary}`, session)
+      if (pending || dialog) {
+        sessions.answerPermission(session.id, pending?.requestId ?? '', { behavior: 'allow' })
+        logActivity(`← ${who}: approved ${what}`, session)
         if (action.followUp) setTimeout(() => sessions.sendPrompt(session.id, action.followUp!), 400)
         return ack(reply, `✓ Approved ${tag}${action.followUp ? ' and queued your note' : ''}`, session)
       }
       break // nothing to approve: treat "yes" as an answer to Claude's question
     case 'deny':
-      if (pending) {
-        sessions.answerPermission(session.id, pending.requestId, {
+      if (pending || dialog) {
+        sessions.answerPermission(session.id, pending?.requestId ?? '', {
           behavior: 'deny',
           message: action.reason ? `The user declined and said: ${action.reason}` : 'The user declined this action.'
         })
-        logActivity(`← ${who}: denied ${pending.summary}${action.reason ? ` — "${action.reason}"` : ''}`, session)
+        // Esc on Claude's own dialog drops back to the prompt; pass the reason on as the next message.
+        if (dialog && action.reason) setTimeout(() => sessions.sendPrompt(session.id, action.reason!), 400)
+        logActivity(`← ${who}: denied ${what}${action.reason ? ` — "${action.reason}"` : ''}`, session)
         return ack(reply, `✓ Denied ${tag}`, session)
       }
       break
@@ -179,6 +198,12 @@ async function handleReply(reply: InboundReply) {
     logActivity(`← ${who}: redirected "${text}"`, session)
     return ack(reply, `✓ Sent to ${tag} instead of the pending action`, session)
   }
+  if (dialog) {
+    sessions.answerPermission(session.id, '', { behavior: 'deny' })
+    setTimeout(() => sessions.sendPrompt(session.id, text), 400)
+    logActivity(`← ${who}: redirected "${text}"`, session)
+    return ack(reply, `✓ Sent to ${tag} instead of the pending action`, session)
+  }
   sessions.sendPrompt(session.id, text)
   router.cancel(session.id)
   logActivity(`← ${who}: "${text}"`, session)
@@ -186,6 +211,7 @@ async function handleReply(reply: InboundReply) {
 }
 
 plugins.on('reply', (r) => void handleReply(r))
+plugins.on('items', ({ sourceId, sourceLabel, items }) => assistant.ingest(sourceId, sourceLabel, items))
 plugins.on('log', (id, level, text) => {
   const line = `[plugin:${id}] ${text}`
   if (level === 'error') console.error(line)
@@ -224,7 +250,9 @@ function createWindow(showOnReady = true) {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
-      spellcheck: false
+      spellcheck: false,
+      // Hidden in the tray, the page still has to chime and update the badge when a session finishes.
+      backgroundThrottling: false
     }
   })
   win.once('ready-to-show', () => showOnReady && win?.show())
@@ -311,12 +339,24 @@ function broadcast(channel: string, ...args: unknown[]) {
   win?.webContents.send(channel, ...args)
 }
 
-sessions.on('update', (s) => broadcast('sessions:update', s))
+sessions.on('update', (s) => {
+  broadcast('sessions:update', s)
+  updatePower()
+})
 sessions.on('data', (id, d, end) => broadcast('sessions:data', id, d, end))
 sessions.on('removed', (id) => broadcast('sessions:removed', id))
 sessions.on('trusted', (s) => logActivity(`Trusted folder automatically: ${s.cwd}`, s))
 sessions.on('error', (id, m) => broadcast('sessions:error', id, m))
 plugins.on('change', () => broadcast('plugins:change'))
+assistant.on('change', () => broadcast('assistant:change'))
+power.on('status', (st) => broadcast('power:status', st))
+
+/** Working sessions, and ones holding a permission prompt for your phone, keep the computer awake. */
+function updatePower() {
+  const active = sessions.list().filter((s) => s.status === 'working' || (s.status === 'waiting_permission' && s.pending?.held)).length
+  const g = store.get().general
+  power.update(active, { keepAwake: g.keepAwake, lidClosed: g.lidClosed })
+}
 history.on('status', (s) => broadcast('history:status', s))
 presence.on('change', (p) => {
   broadcast('presence:change', { presence: p, mode: presence.mode })
@@ -394,6 +434,13 @@ function registerIpc() {
 
   ipcMain.handle('activity:list', () => activity)
 
+  ipcMain.handle('assistant:list', () => assistant.list())
+  ipcMain.handle('assistant:stats', () => assistant.getStats())
+  ipcMain.handle('assistant:muteSender', (_e, sender: string) => assistant.muteSender(sender))
+  ipcMain.handle('assistant:markAllSeen', () => assistant.markAllSeen())
+  ipcMain.handle('assistant:retryErrors', () => assistant.retryErrors())
+  ipcMain.handle('power:status', () => power.status())
+
   ipcMain.handle('app:openExternal', (_e, url: string) => openExternal(url))
   ipcMain.handle('app:pickFolder', async (_e, defaultPath?: string) => {
     const r = await dialog.showOpenDialog(win!, { properties: ['openDirectory', 'createDirectory'], defaultPath })
@@ -414,6 +461,10 @@ app.whenReady().then(async () => {
   sessions.setHookEndpoint(port, hooks.token)
   sessions.restore()
   registerIpc()
+  power.recover()
+  store.onChange(() => updatePower())
+  updatePower()
+  assistant.load()
   presence.start()
   plugins.discover()
   plugins.startEnabled()
@@ -436,6 +487,8 @@ app.on('before-quit', () => {
   quitting = true
   tray.destroy()
   sessions.shutdown()
+  assistant.stop()
+  power.dispose()
   plugins.stopAll()
   history.stop()
   presence.stop()

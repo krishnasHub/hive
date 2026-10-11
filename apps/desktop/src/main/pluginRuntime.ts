@@ -12,8 +12,14 @@ interface ChannelImpl {
   stop?(): Promise<void> | void
 }
 
+interface SourceImpl {
+  test?(): Promise<string | void> | string | void
+  stop?(): Promise<void> | void
+}
+
 const port = process.parentPort
 let channel: ChannelImpl | undefined
+let source: SourceImpl | undefined
 let deactivate: (() => unknown) | undefined
 
 function post(msg: Msg) {
@@ -65,6 +71,15 @@ async function init(m: Msg) {
       /** Hand a reply from your phone to Hive. */
       reply: (r: { text: string; threadRef?: string; actionId?: string; from?: string }) =>
         post({ type: 'reply', reply: { text: String(r.text ?? ''), threadRef: r.threadRef, actionId: r.actionId, from: r.from } })
+    },
+    source: {
+      register: (impl: SourceImpl) => {
+        source = impl ?? {}
+      },
+      /** Hand new items (emails, messages) to Hive's assistant. */
+      emit: (items: unknown[]) => {
+        if (Array.isArray(items) && items.length) post({ type: 'items', items })
+      }
     }
   }
 
@@ -91,14 +106,16 @@ port.on('message', async (e: { data: Msg }) => {
         break
       }
       case 'test': {
-        if (!channel) throw new Error('Plugin did not register a channel')
-        const r = channel.test ? await channel.test() : undefined
+        const impl = channel?.test ? channel : source?.test ? source : channel
+        if (!impl) throw new Error('Plugin did not register a channel or source')
+        const r = impl.test ? await impl.test() : undefined
         post({ type: 'result', id: m.id, ok: true, value: r ?? 'OK' })
         break
       }
       case 'stop':
         try {
           await channel?.stop?.()
+          await source?.stop?.()
           await deactivate?.()
         } finally {
           process.exit(0)

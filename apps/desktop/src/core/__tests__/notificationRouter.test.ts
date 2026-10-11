@@ -18,6 +18,7 @@ function harness() {
   let now = 0
   let ids = 0
   let presence: Presence = 'away'
+  let alertPending = true
   const timers: { at: number; fn: () => void; h: number }[] = []
   const sent: { channel: string; msg: OutboundMessage }[] = []
   const toasts: OutboundMessage[] = []
@@ -44,7 +45,8 @@ function harness() {
       sent.push({ channel, msg })
       return { threadRef: `t-${msg.id}` }
     },
-    desktop: (msg) => toasts.push(msg)
+    desktop: (msg) => toasts.push(msg),
+    alertPending: () => alertPending
   })
   const advance = async (ms: number) => {
     now += ms
@@ -65,7 +67,8 @@ function harness() {
     sessions,
     cfg,
     advance,
-    setPresence: (p: Presence) => (presence = p)
+    setPresence: (p: Presence) => (presence = p),
+    setAlertPending: (v: boolean) => (alertPending = v)
   }
 }
 
@@ -139,6 +142,32 @@ describe('NotificationRouter', () => {
     const threadRef = `t-${h.sent[0].msg.id}`
     const r = h.router.resolveReply({ channelId: 'slack', threadRef, text: 'yes, but skip seeds' })
     expect(r).toMatchObject({ session: { id: 's1' }, requestId: 'r1', action: { type: 'approve', followUp: 'skip seeds' } })
+  })
+
+  it('sends alerts after the delay unless seen, and routes their replies to the alert', async () => {
+    const msg = { id: 'a1', kind: 'alert' as const, title: '📬 Gmail · Jane', body: 'prod down', actions: [], text: 'x' }
+    const r = h.router
+    r.alert(msg, 'gmail:1')
+    expect(h.toasts).toHaveLength(1)
+    await h.advance(10_000)
+    expect(h.sent).toHaveLength(1)
+    const reply = r.resolveReply({ channelId: 'slack', threadRef: 't-a1', text: 'mute' })
+    expect(reply).toEqual({ alertKey: 'gmail:1', text: 'mute', actionId: undefined })
+    // An alert never becomes the "last session" fallback for un-threaded replies.
+    expect(r.resolveReply({ channelId: 'slack', text: 'hello' })).toHaveProperty('error')
+
+    h.setAlertPending(false)
+    r.alert({ ...msg, id: 'a2' }, 'gmail:2')
+    await h.advance(10_000)
+    expect(h.sent).toHaveLength(1)
+  })
+
+  it('remembers ack threads so replying to an ack reaches the session', () => {
+    const s = session({ status: 'idle', pending: undefined })
+    h.sessions.set(s.id, s)
+    h.sessions.set('other', session({ id: 'other', shortCode: 'Z9Z', status: 'idle', pending: undefined }))
+    h.router.rememberThread('telegram', '42', { sessionId: 's1' })
+    expect(h.router.resolveReply({ channelId: 'telegram', threadRef: '42', text: 'go on' })).toMatchObject({ session: { id: 's1' } })
   })
 
   it('routes by session code when there is no thread', () => {

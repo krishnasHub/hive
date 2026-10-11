@@ -24,6 +24,7 @@ interface Entry {
 
 export interface PluginHostEvents {
   reply: [InboundReply]
+  items: [{ sourceId: string; sourceLabel: string; items: unknown[] }]
   change: []
   log: [string, string, string] // pluginId, level, text
 }
@@ -89,6 +90,15 @@ export class PluginHost extends EventEmitter<PluginHostEvents> {
     const out: string[] = []
     for (const e of this.entries.values()) {
       if (e.runState === 'running' && e.manifest.contributes?.channel) out.push(e.manifest.contributes.channel.id)
+    }
+    return out
+  }
+
+  /** Sources (Gmail, Slack, ...) that are up. */
+  runningSources(): { id: string; label: string }[] {
+    const out: { id: string; label: string }[] = []
+    for (const e of this.entries.values()) {
+      if (e.runState === 'running' && e.manifest.contributes?.source) out.push(e.manifest.contributes.source)
     }
     return out
   }
@@ -236,6 +246,12 @@ export class PluginHost extends EventEmitter<PluginHostEvents> {
         if (!channelId) return
         const r = m.reply as Omit<InboundReply, 'channelId'>
         this.emit('reply', { ...r, channelId })
+        break
+      }
+      case 'items': {
+        const src = e.manifest.contributes?.source
+        if (!src || !Array.isArray(m.items)) return
+        this.emit('items', { sourceId: src.id, sourceLabel: src.label, items: m.items })
         break
       }
       case 'result': {

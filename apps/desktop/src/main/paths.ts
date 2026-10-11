@@ -16,6 +16,10 @@ export const paths = {
   userPlugins: join(hiveHome, 'plugins'),
   pluginData: join(hiveHome, 'plugin-data'),
   logs: join(hiveHome, 'logs'),
+  assistant: join(hiveHome, 'assistant.json'),
+  /** Working folder for headless triage runs (kept empty so no project settings or CLAUDE.md apply). */
+  assistantRun: join(hiveHome, 'assistant'),
+  lidState: join(hiveHome, 'lid-override.json'),
   claudeProjects: join(claudeHome, 'projects')
 }
 
@@ -25,7 +29,7 @@ export function builtinPluginsDir(): string {
 }
 
 export function ensureDirs() {
-  for (const d of [hiveHome, paths.run, paths.attachments, paths.userPlugins, paths.pluginData, paths.logs]) {
+  for (const d of [hiveHome, paths.run, paths.attachments, paths.userPlugins, paths.pluginData, paths.logs, paths.assistantRun]) {
     mkdirSync(d, { recursive: true })
   }
 }

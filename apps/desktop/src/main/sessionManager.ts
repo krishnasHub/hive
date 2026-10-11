@@ -494,7 +494,7 @@ const INHERITED_SESSION_VARS = [
   'ELECTRON_RUN_AS_NODE'
 ]
 
-function childEnv(): Record<string, string> {
+export function childEnv(): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v
   for (const k of INHERITED_SESSION_VARS) delete env[k]
