@@ -1,0 +1,47 @@
+{
+  "id": "source-gmail",
+  "name": "Gmail",
+  "version": "0.1.0",
+  "description": "Watches your Gmail inbox and lets Hive tell you when an email actually needs you. Read-only IMAP with a Google app password: nothing is sent, deleted or marked as read.",
+  "main": "index.js",
+  "hiveApi": 1,
+  "contributes": {
+    "source": { "id": "gmail", "label": "Gmail" }
+  },
+  "settings": [
+    {
+      "key": "email",
+      "label": "Gmail address",
+      "type": "string",
+      "required": true,
+      "placeholder": "you@gmail.com"
+    },
+    {
+      "key": "appPassword",
+      "label": "App password",
+      "type": "secret",
+      "required": true,
+      "help": "Create one at https://myaccount.google.com/apppasswords (needs 2-Step Verification). Not your normal Google password."
+    },
+    {
+      "key": "pollMinutes",
+      "label": "Check every (minutes)",
+      "type": "number",
+      "default": 2,
+      "help": "Minimum 1."
+    },
+    {
+      "key": "skipCategories",
+      "label": "Skip the Promotions, Social and Forums tabs",
+      "type": "boolean",
+      "default": true
+    },
+    {
+      "key": "onlyImportant",
+      "label": "Only messages Gmail marks as Important",
+      "type": "boolean",
+      "default": false
+    }
+  ],
+  "docs": "1. Turn on 2-Step Verification for your Google account: https://myaccount.google.com/signinoptions/two-step-verification\n2. Create an app password at https://myaccount.google.com/apppasswords (name it \"Hive\"). Google shows 16 letters.\n3. Paste your Gmail address and the app password below, then Save.\n4. Enable the plugin and press \"Test connection\".\n\nHive only reads mail: it never sends, deletes or marks anything as read. Only messages that arrive after you turn it on are checked. Revoke the app password any time to cut access."
+}
